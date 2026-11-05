@@ -25,6 +25,51 @@ html{scroll-behavior:smooth}.stApp{background:var(--paper);color:var(--ink);font
 [data-testid="stExpander"]{border:1px solid #111!important;border-radius:0!important;background:#fff;box-shadow:none}[data-testid="stExpander"] summary{font-family:'Noto Serif SC',serif;font-weight:700}.stNumberInput input,.stDateInput input{border-radius:0!important;background:#fafafa!important}.stButton>button,.stDownloadButton>button{border-radius:0;min-height:43px;font-size:11px;font-weight:700;border:1px solid #111}.stButton>button[kind="primary"],.stDownloadButton>button[kind="primary"]{background:var(--lime);color:#111;border-color:#111;box-shadow:3px 3px 0 #111}.stButton>button[kind="primary"]:hover,.stDownloadButton>button[kind="primary"]:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 #111}.stButton>button[kind="primary"]:disabled{background:#e5e7eb;border-color:#c7c7c7;color:#9ca3af;box-shadow:none}
 .download-card{background:#fff;border:1px solid #111;padding:14px;margin:5px 0 8px}.download-card b{font-family:'Noto Serif SC',serif;font-size:12px}.download-card span{color:#9ca3af;font-size:9px}.section-label{font-family:'Noto Serif SC',serif;font-size:18px;font-weight:700;margin:28px 0 5px}.section-note{color:#6b7280;font-size:10px;margin-bottom:12px}.fixed-footer{height:52px;margin-top:28px;border-top:1px solid #1112;display:flex;align-items:center;justify-content:space-between}.fixed-footer span,.fixed-footer b{font-size:9px;color:#6b7280}footer{visibility:hidden}
 @media(max-width:900px){[data-testid="stSidebar"]{display:none}.block-container{padding:20px 15px 55px}.topbar h1{font-size:30px}.step-line{width:13px;margin:0 6px}.steps{overflow-x:auto}[data-testid="stVerticalBlockBorderWrapper"]{padding:14px!important}}
+
+/* 可读性修正版：收紧超宽屏、放大文字、修复上传按钮重叠 */
+html{font-size:17px}
+.block-container{max-width:1280px!important;padding:42px 42px 90px!important;margin:0 auto!important}
+[data-testid="stSidebar"]{width:86px!important;min-width:86px!important}
+[data-testid="stSidebar"]>div:first-child{width:86px!important;padding:28px 0!important}
+.brand-mark{width:44px;height:44px;font-size:19px;margin-bottom:42px}
+.nav-link{width:44px;height:44px;font-size:20px;margin:16px auto}
+.nav-space{height:270px}.nav-hint{font-size:10px;color:#71717a;line-height:1.45}
+.topbar{padding-bottom:32px;margin-bottom:28px}.eyebrow{font-size:13px;margin-bottom:12px}
+.topbar h1{font-size:46px;margin-bottom:14px}.topbar p{font-size:15px}
+.steps{margin-top:32px}.step{font-size:14px;gap:9px}.step b{width:29px;height:29px;font-size:11px}.step-line{width:52px;margin:0 15px}
+.upload-head{padding-bottom:16px;margin-bottom:20px}.upload-head h2{font-size:25px}.upload-head h2:before{font-size:14px}.upload-head p{font-size:13px}.upload-count{font-size:12px;padding:7px 10px}
+[data-testid="stVerticalBlockBorderWrapper"]{padding:24px!important;margin-bottom:22px!important}
+[data-testid="stFileUploader"]{padding:16px 16px 10px!important;min-height:150px!important}
+[data-testid="stFileUploader"] label{font-size:15px!important;line-height:1.45!important}
+[data-testid="stFileUploaderDropzone"]{min-height:74px!important;padding:14px 0!important;display:flex!important;align-items:center!important;justify-content:flex-end!important}
+[data-testid="stFileUploaderDropzoneInstructions"]{display:none!important}
+[data-testid="stFileUploaderDropzone"] svg{display:none!important}
+[data-testid="stFileUploaderDropzone"] small{display:none!important}
+[data-testid="stFileUploaderDropzone"] button{color:transparent!important;background:var(--lime)!important;border:1px solid #111!important;border-radius:0!important;width:118px!important;min-width:118px!important;height:42px!important;padding:0!important;font-size:0!important;box-shadow:2px 2px 0 #111!important;position:relative!important}
+[data-testid="stFileUploaderDropzone"] button:after{content:'上传文件'!important;font-size:14px!important;font-weight:700!important;color:#111!important;position:absolute!important;inset:0!important;display:grid!important;place-items:center!important}
+.file-status{padding:9px 11px;font-size:11px;margin-bottom:16px}
+.panel{padding:21px;margin-bottom:20px}.panel-title{font-size:16px;padding-bottom:12px;margin-bottom:16px}.panel-title span{font-size:11px;color:#71717a}
+.mini-metrics{gap:16px;margin-bottom:16px}.mini-metric:first-child strong{font-size:40px}.mini-metric strong{font-size:18px}.mini-metric small{font-size:11px;color:#71717a}
+.task{padding:10px 0;font-size:12px}.task .done{padding:2px 6px}.event b{font-size:13px}.event span{font-size:11px;color:#71717a}
+.section-label{font-size:23px;margin-top:32px}.section-note{font-size:12px;margin-bottom:14px}
+.download-card{padding:16px}.download-card b{font-size:15px}.download-card span{font-size:11px}
+.fixed-footer span,.fixed-footer b{font-size:11px}
+.stButton>button,.stDownloadButton>button{font-size:13px;min-height:45px}
+@media(min-width:1600px){.block-container{max-width:1340px!important}.topbar h1{font-size:50px}}
+@media(max-width:900px){html{font-size:16px}.block-container{padding:22px 16px 60px!important}.topbar h1{font-size:34px}.topbar p{font-size:13px}.step{font-size:12px}.step-line{width:14px;margin:0 6px}[data-testid="stVerticalBlockBorderWrapper"]{padding:15px!important}[data-testid="stFileUploader"]{min-height:132px!important}.panel{padding:16px}}
+
+/* 上传卡片：整卡展示信息，右侧圆形加号触发文件选择 */
+[data-testid="stFileUploader"]{position:relative!important;min-height:210px!important;padding:32px 34px!important;overflow:visible!important}
+[data-testid="stFileUploader"] label{max-width:72%!important;margin:0!important;padding:0!important}
+[data-testid="stFileUploader"] label p{font-size:16px!important;line-height:1.65!important;color:#6b7280!important;font-weight:500!important;margin:0!important}
+[data-testid="stFileUploader"] label strong{display:block!important;font-family:'Noto Serif SC',serif!important;font-size:23px!important;line-height:1.35!important;color:#111!important;font-weight:900!important;margin-bottom:7px!important}
+[data-testid="stFileUploader"]:after{content:'XLSX, XLSM, CSV · MAX 1GB';position:absolute;left:34px;bottom:30px;color:#9ca3af;font-size:13px;font-weight:600;letter-spacing:.3px}
+[data-testid="stFileUploaderDropzone"]{position:absolute!important;right:30px!important;top:31px!important;width:58px!important;height:58px!important;min-height:58px!important;padding:0!important;display:block!important;background:transparent!important;overflow:visible!important}
+[data-testid="stFileUploaderDropzone"] button{display:block!important;position:absolute!important;inset:0!important;width:58px!important;min-width:58px!important;height:58px!important;border-radius:50%!important;background:#fff!important;border:1.5px solid #111!important;box-shadow:none!important;padding:0!important}
+[data-testid="stFileUploaderDropzone"] button:after{content:'＋'!important;font-family:'Inter',sans-serif!important;font-size:34px!important;line-height:1!important;font-weight:400!important;color:#111!important;position:absolute!important;inset:0!important;display:grid!important;place-items:center!important}
+[data-testid="stFileUploader"]:hover [data-testid="stFileUploaderDropzone"] button{background:var(--lime)!important}
+.file-status:not(.ok){display:none!important}.file-status.ok{margin:-8px 0 16px!important;font-size:12px!important}
+@media(max-width:900px){[data-testid="stFileUploader"]{min-height:180px!important;padding:25px 22px!important}[data-testid="stFileUploader"] label strong{font-size:19px!important}[data-testid="stFileUploader"]:after{left:22px;bottom:24px;font-size:11px}[data-testid="stFileUploaderDropzone"]{right:20px!important;top:23px!important;width:50px!important;height:50px!important;min-height:50px!important}[data-testid="stFileUploaderDropzone"] button{width:50px!important;min-width:50px!important;height:50px!important}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -41,14 +86,14 @@ with main_col:
         upload_header = st.empty()
         u1, u2 = st.columns(2)
         with u1:
-            reg_files = st.file_uploader("注册数据 · 用户注册与渠道来源数据", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
+            reg_files = st.file_uploader("**注册数据**  \n用户注册与渠道来源", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
             st.markdown(f'<div class="file-status{" ok" if reg_files else ""}">{"✓ 已上传 "+str(len(reg_files))+" 个文件 · 等待格式检查" if reg_files else "待上传 · XLSX / XLSM / CSV · 单文件最大1GB"}</div>', unsafe_allow_html=True)
-            google_files = st.file_uploader("Google 消耗 · Google Ads 投放消耗", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
+            google_files = st.file_uploader("**Google消耗**  \nGoogle Ads 投放消耗", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
             st.markdown(f'<div class="file-status{" ok" if google_files else ""}">{"✓ 已上传 "+str(len(google_files))+" 个文件 · 等待格式检查" if google_files else "待上传 · XLSX / XLSM / CSV · 单文件最大1GB"}</div>', unsafe_allow_html=True)
         with u2:
-            order_files = st.file_uploader("订单数据 · 订单及收入相关数据", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
+            order_files = st.file_uploader("**订单数据**  \n订单及收入相关数据", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
             st.markdown(f'<div class="file-status{" ok" if order_files else ""}">{"✓ 已上传 "+str(len(order_files))+" 个文件 · 等待格式检查" if order_files else "待上传 · XLSX / XLSM / CSV · 单文件最大1GB"}</div>', unsafe_allow_html=True)
-            bing_files = st.file_uploader("Bing 消耗 · Bing Ads 投放消耗", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
+            bing_files = st.file_uploader("**Bing消耗**  \nBing Ads 投放消耗", type=["xlsx","xlsm","csv"], accept_multiple_files=True)
             st.markdown(f'<div class="file-status{" ok" if bing_files else ""}">{"✓ 已上传 "+str(len(bing_files))+" 个文件 · 等待格式检查" if bing_files else "待上传 · XLSX / XLSM / CSV · 单文件最大1GB"}</div>', unsafe_allow_html=True)
         uploaded_count = sum(bool(x) for x in [reg_files, order_files, google_files, bing_files])
         upload_header.markdown(f'<div class="upload-head"><div><h2>上传源数据</h2><p>上传4类数据，系统将自动完成格式检查和数据预处理</p></div><div class="upload-count">{uploaded_count} / 4 已完成</div></div>', unsafe_allow_html=True)
