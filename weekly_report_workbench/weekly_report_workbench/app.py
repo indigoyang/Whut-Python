@@ -3,9 +3,16 @@ from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import streamlit as st
+import pandas as pd
 
 from report_engine import read_uploads
 from v3_report_engine import generate_v3_reports
+from target_store import (
+    ALL_CHANNEL_TARGET_METRICS,
+    SEM_TARGET_METRICS,
+    load_targets,
+    save_targets,
+)
 
 
 st.set_page_config(page_title="周报—末次归因生成", page_icon="A", layout="wide", initial_sidebar_state="expanded")
@@ -84,6 +91,11 @@ with st.sidebar:
 
 st.markdown("""<header class="topbar"><div class="eyebrow">Weekly Report Generator</div><h1>周报—末次归因生成</h1><p>上传数据，自动完成校验、归因计算并生成三份可编辑周报</p><div class="steps"><div class="step done"><b>✓</b>选择周期</div><div class="step-line"></div><div class="step on"><b>02</b>上传数据</div><div class="step-line"></div><div class="step"><b>03</b>补充信息</div><div class="step-line"></div><div class="step"><b>04</b>生成报告</div></div></header><div id="upload-data"></div>""", unsafe_allow_html=True)
 
+today = date.today()
+default_end = today - timedelta(days=1)
+default_start = default_end - timedelta(days=6)
+target_month_end = st.session_state.get("report_end", default_end)
+
 main_col, side_col = st.columns([3.15, 1], gap="large")
 
 with main_col:
@@ -115,10 +127,73 @@ with main_col:
             for col, (key, label) in zip(cols, periods):
                 input_values[f"{prefix}_{key}"] = col.number_input(label, min_value=0.0, value=0.0, key=f"{prefix}_{key}")
 
+    with st.expander("月度目标设置（每月填写一次）", expanded=False):
+        month_key = target_month_end.strftime("%Y-%m")
+        all_targets = load_targets()
+        month_targets = all_targets.get(month_key, {})
+        st.caption(
+            f"当前维护月份：{month_key}。金额、人数直接填数值；百分比目标按百分数填写，"
+            "例如75%填写75。保存后所有用户默认使用这组目标。"
+        )
+        admin_password = st.text_input("目标管理密码", type="password", key="target_admin_password")
+        target_tab_all, target_tab_sem = st.tabs(["全渠道目标", "SEM目标"])
+
+        def target_editor(tab, metrics, values, key):
+            rows = pd.DataFrame(
+                [{"指标": metric, "目标": values.get(metric)} for metric in metrics]
+            )
+            with tab:
+                return st.data_editor(
+                    rows,
+                    column_config={
+                        "指标": st.column_config.TextColumn("指标", disabled=True),
+                        "目标": st.column_config.NumberColumn("目标", min_value=0.0, format="%.2f"),
+                    },
+                    disabled=["指标"],
+                    hide_index=True,
+                    use_container_width=True,
+                    height=420,
+                    key=key,
+                )
+
+        edited_all = target_editor(
+            target_tab_all, ALL_CHANNEL_TARGET_METRICS,
+            month_targets.get("all_channel", {}), f"all_targets_{month_key}"
+        )
+        edited_sem = target_editor(
+            target_tab_sem, SEM_TARGET_METRICS,
+            month_targets.get("sem", {}), f"sem_targets_{month_key}"
+        )
+
+        if st.button("保存本月目标", type="primary", key="save_monthly_targets"):
+            expected_password = st.secrets.get("target_admin_password", "")
+            if not expected_password:
+                st.error("尚未在 Streamlit Secrets 中设置 target_admin_password。")
+            elif admin_password != expected_password:
+                st.error("目标管理密码不正确。")
+            else:
+                def clean(frame):
+                    result = {}
+                    for row in frame.to_dict("records"):
+                        value = row.get("目标")
+                        if value is not None and not pd.isna(value):
+                            result[row["指标"]] = float(value)
+                    return result
+
+                all_targets[month_key] = {
+                    "all_channel": clean(edited_all),
+                    "sem": clean(edited_sem),
+                }
+                try:
+                    save_targets(all_targets, st.secrets)
+                    st.success(f"{month_key}目标已保存，之后会默认使用。")
+                except Exception as exc:
+                    st.error(str(exc))
+
 with side_col:
     st.markdown('<div class="panel"><div class="panel-title">报告信息<span>自动保存</span></div>', unsafe_allow_html=True)
-    today = date.today(); default_end = today - timedelta(days=1); default_start = default_end - timedelta(days=6)
-    start = st.date_input("开始日期", default_start); end = st.date_input("结束日期", default_end)
+    start = st.date_input("开始日期", default_start, key="report_start")
+    end = st.date_input("结束日期", default_end, key="report_end")
     st.caption(f"当前周期 · {start:%Y.%m.%d} – {end:%Y.%m.%d}")
     st.markdown('</div>', unsafe_allow_html=True)
 
