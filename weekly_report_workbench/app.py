@@ -14,6 +14,8 @@ from target_store import (
     ALL_CHANNEL_TARGET_ROWS,
     SEM_TARGET_METRICS,
     SEM_TARGET_ROWS,
+    NATURAL_TARGET_METRICS,
+    NATURAL_TARGET_ROWS,
     load_targets,
     save_targets,
 )
@@ -100,7 +102,7 @@ with st.sidebar:
     admin_title = "退出管理模式" if admin_mode else "管理设置"
     st.markdown(f"""<div class="brand-mark" title="周报生成器">A</div><a class="nav-link active" href="#upload-data" title="上传数据">⇧</a><a class="nav-link" href="#manual-data" title="补充数据">＋</a><a class="nav-link" href="#report-result" title="生成结果">▦</a><a class="nav-link" href="{admin_link}" title="{admin_title}">⚙</a><a class="nav-link" href="#help" title="使用说明">?</a><div class="nav-space"></div><div class="nav-hint">WEEKLY<br>REPORT</div>""", unsafe_allow_html=True)
 
-st.markdown("""<header class="topbar"><div class="eyebrow">Weekly Report Generator</div><h1>周报—末次归因生成</h1><p>上传数据，自动完成校验、归因计算并生成三份可编辑周报</p><div class="steps"><div class="step done"><b>✓</b>选择周期</div><div class="step-line"></div><div class="step on"><b>02</b>上传数据</div><div class="step-line"></div><div class="step"><b>03</b>补充信息</div><div class="step-line"></div><div class="step"><b>04</b>生成报告</div></div></header><div id="upload-data"></div>""", unsafe_allow_html=True)
+st.markdown("""<header class="topbar"><div class="eyebrow">Weekly Report Generator</div><h1>周报—末次归因生成</h1><p>上传数据，自动完成校验、归因计算并生成四份可编辑周报</p><div class="steps"><div class="step done"><b>✓</b>选择周期</div><div class="step-line"></div><div class="step on"><b>02</b>上传数据</div><div class="step-line"></div><div class="step"><b>03</b>补充信息</div><div class="step-line"></div><div class="step"><b>04</b>生成报告</div></div></header><div id="upload-data"></div>""", unsafe_allow_html=True)
 
 today = date.today()
 default_end = today - timedelta(days=1)
@@ -138,6 +140,26 @@ with main_col:
             for col, (key, label) in zip(cols, periods):
                 input_values[f"{prefix}_{key}"] = col.number_input(label, min_value=0.0, value=0.0, key=f"{prefix}_{key}")
 
+    with st.expander("自然来源周报补充数据", expanded=False):
+        st.caption("APP数据、达人数据与品牌词搜索量暂时没有数据库来源，按本周、上周和MTD手动填写。")
+        natural_groups = [
+            ("natural_creators", "已发布达人数量"),
+            ("natural_exposure", "曝光量"),
+            ("natural_brand_search", "WEB品牌词搜索量"),
+            ("natural_app_reg", "APP自然量注册数"),
+            ("natural_app_revenue", "APP自然量新用户收入"),
+            ("natural_creator_cost", "达人合作费"),
+            ("natural_boost_cost", "投流费"),
+        ]
+        for prefix, title in natural_groups:
+            st.markdown(f"**{title}**")
+            cols = st.columns(3)
+            for col, (period_key, label) in zip(cols, periods):
+                input_values[f"{prefix}_{period_key}"] = col.number_input(
+                    label, min_value=0.0, value=0.0,
+                    key=f"{prefix}_{period_key}",
+                )
+
     with st.expander("月度目标设置（每月填写一次）", expanded=False):
         month_key = target_month_end.strftime("%Y-%m")
         all_targets = load_targets()
@@ -146,7 +168,9 @@ with main_col:
             f"当前维护月份：{month_key}。金额、人数直接填数值；百分比目标按百分数填写，"
             "例如75%填写75。保存后所有用户默认使用这组目标。"
         )
-        target_tab_all, target_tab_sem = st.tabs(["全渠道目标", "SEM目标"])
+        target_tab_all, target_tab_sem, target_tab_natural = st.tabs(
+            ["全渠道目标", "SEM目标", "自然来源目标"]
+        )
 
         def target_editor(tab, rows_config, values, key):
             with tab:
@@ -213,6 +237,10 @@ with main_col:
             target_tab_sem, SEM_TARGET_ROWS,
             month_targets.get("sem", {}), f"sem_targets_{month_key}"
         )
+        edited_natural = target_editor(
+            target_tab_natural, NATURAL_TARGET_ROWS,
+            month_targets.get("natural_source", {}), f"natural_targets_{month_key}"
+        )
 
         if st.button("保存本月目标", type="primary", key="save_monthly_targets"):
             def clean(frame):
@@ -227,6 +255,7 @@ with main_col:
             all_targets[month_key] = {
                 "all_channel": clean(edited_all),
                 "sem": clean(edited_sem),
+                "natural_source": clean(edited_natural),
             }
             try:
                 save_targets(all_targets, st.secrets)
@@ -373,7 +402,7 @@ with side_col:
     task_rows = [("报告周期",True),("注册数据",bool(reg_files)),("订单数据",bool(order_files)),("Google消耗",bool(google_files)),("Bing消耗",bool(bing_files))]
     tasks_html = "".join(f'<div class="task"><b>{"✓" if done else "○"} {name}</b><span class="{"done" if done else ""}">{"已完成" if done else "待上传"}</span></div>' for name,done in task_rows)
     st.markdown(f'<div class="panel"><div class="panel-title">报告准备度<span>{readiness}%</span></div><div class="mini-metrics"><div class="mini-metric"><strong>{readiness}%</strong><small>当前进度</small></div><div class="mini-metric"><strong>{completed} / 5</strong><small>已完成项目</small></div></div><div class="progress-track"><i style="width:{readiness}%"></i></div><div style="height:10px"></div>{tasks_html}</div>', unsafe_allow_html=True)
-    st.markdown('<div class="panel"><div class="panel-title">自动化流程<span>1–3分钟</span></div><div class="timeline"><div class="event"><b>数据文件检查</b><span>上传后自动校验必要字段</span></div><div class="event"><b>字段自动识别</b><span>兼容Google与Bing中文字段</span></div><div class="event"><b>报告生成</b><span>输出全渠道 / SEM / SEM分地区</span></div></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel"><div class="panel-title">自动化流程<span>1–3分钟</span></div><div class="timeline"><div class="event"><b>数据文件检查</b><span>上传后自动校验必要字段</span></div><div class="event"><b>字段自动识别</b><span>兼容Google与Bing中文字段</span></div><div class="event"><b>报告生成</b><span>输出全渠道 / SEM / SEM分地区 / 自然来源</span></div></div></div>', unsafe_allow_html=True)
     ready = all([reg_files, order_files, google_files, bing_files]) and start <= end
     generate_clicked = st.button("✦ 开始生成报告" if ready else "请先上传全部必要数据", type="primary", disabled=not ready, use_container_width=True)
 
@@ -395,7 +424,7 @@ if generate_clicked:
                     targets=load_targets(), rules=load_rules(),
                 )
                 st.session_state["reports"] = reports; st.session_state["warnings"] = warnings
-                status.update(label="三份周报已生成", state="complete", expanded=False)
+                status.update(label="四份周报已生成", state="complete", expanded=False)
     except Exception as exc:
         with main_col: st.exception(exc)
 
@@ -404,14 +433,16 @@ if st.session_state.get("reports"):
     with main_col:
         for warning in st.session_state.get("warnings", []): st.warning(warning)
         st.markdown('<div id="report-result"></div><div class="section-label">03 报告已就绪</div><div class="section-note">可分别下载Excel，也可以一次下载完整压缩包。</div>', unsafe_allow_html=True)
-        cols = st.columns(3); metas = ["全渠道末次归因","SEM末次归因","SEM分地区末次归因"]
-        for col, (filename, content), meta in zip(cols, reports.items(), metas):
+        cols = st.columns(2)
+        metas = ["全渠道末次归因", "SEM末次归因", "SEM分地区末次归因", "自然来源周报"]
+        for index, ((filename, content), meta) in enumerate(zip(reports.items(), metas)):
+            col = cols[index % 2]
             with col:
                 st.markdown(f'<div class="download-card"><b>{meta}</b><br><span>Excel · {len(content)/1024:.1f} KB</span></div>', unsafe_allow_html=True)
                 st.download_button("下载周报", content, filename, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=filename)
         bundle = BytesIO()
         with ZipFile(bundle, "w", ZIP_DEFLATED) as archive:
             for filename, content in reports.items(): archive.writestr(filename, content)
-        st.download_button("一键下载三份周报（ZIP）", bundle.getvalue(), f"末次归因周报_{start:%Y.%m.%d}-{end:%Y.%m.%d}.zip", "application/zip", type="primary", use_container_width=True)
+        st.download_button("一键下载四份周报（ZIP）", bundle.getvalue(), f"末次归因周报_{start:%Y.%m.%d}-{end:%Y.%m.%d}.zip", "application/zip", type="primary", use_container_width=True)
 
 st.markdown('<div id="help"></div><div class="fixed-footer"><span>文件仅用于本次浏览器会话 · 刷新页面后需重新上传</span><b>WEEKLY REPORT GENERATOR · 末次归因工作台</b></div>', unsafe_allow_html=True)

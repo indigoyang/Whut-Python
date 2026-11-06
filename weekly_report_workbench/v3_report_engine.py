@@ -18,6 +18,7 @@ from report_engine import blank_mask, prepare_data, safe_div, web_mask
 ROOT = Path(__file__).resolve().parent
 WEEKLY = ROOT / "vendor"
 REGION_TEMPLATE = ROOT / "assets" / "周报SEM分地区-新.xlsx"
+NATURAL_TEMPLATE = ROOT / "assets" / "自然来源表格.xlsx"
 MONTHLY_TARGETS_FILE = ROOT / "config" / "monthly_targets.json"
 REPORT_RULES_FILE = ROOT / "config" / "report_rules.json"
 
@@ -317,6 +318,135 @@ def _all_metrics(reg, orders, google, bing, dates, inputs):
     return m
 
 
+def _natural_metrics(reg, orders, dates, inputs):
+    """自然来源周报：WEB自动统计，APP、达人和品牌词数据由页面手动补充。"""
+    if "末次来源类型" not in reg.columns:
+        raise ValueError("自然来源周报需要注册数据字段：末次来源类型")
+
+    result = defaultdict(float)
+    attributed = orders.copy()
+    attributed["收入归因"] = _attrib(attributed)
+    natural_channels = {"SEO", "KOL", "Unassigned", "Affiliate", "Blank"}
+    periods = {
+        "本周": (dates["this_week_start"], dates["this_week_end"]),
+        "上周": (dates["last_week_start"], dates["last_week_end"]),
+        "MTD": (dates["month_start"], dates["month_end"]),
+    }
+    for label, (period_start, period_end) in periods.items():
+        period_reg = reg[_between(reg["注册时间"], period_start, period_end) & reg["__web"]]
+        last_source = period_reg["末次来源类型"].fillna("").astype(str).str.strip().str.upper()
+        web_natural_reg = int(last_source.ne("SEM").sum())
+
+        period_orders = attributed[
+            _between(attributed["订单生成时间"], period_start, period_end)
+            & attributed["__web"]
+        ]
+        new_orders = period_orders[_new_user_mask(period_orders)]
+        natural_new = new_orders[new_orders["收入归因"].isin(natural_channels)]
+        natural_non_subscription = period_orders[
+            period_orders["收入归因"].isin(natural_channels)
+        ]
+
+        creators = float(inputs.get(f"natural_creators_{label}", 0))
+        exposure = float(inputs.get(f"natural_exposure_{label}", 0))
+        brand_search = float(inputs.get(f"natural_brand_search_{label}", 0))
+        app_reg = float(inputs.get(f"natural_app_reg_{label}", 0))
+        app_revenue = float(inputs.get(f"natural_app_revenue_{label}", 0))
+        creator_cost = float(inputs.get(f"natural_creator_cost_{label}", 0))
+        boost_cost = float(inputs.get(f"natural_boost_cost_{label}", 0))
+        total_cost = creator_cost + boost_cost
+
+        result[f"已发布达人数量_{label}"] = creators
+        result[f"当周曝光_{label}"] = exposure
+        result[f"CPM_{label}"] = safe_div(total_cost * 1000, exposure) if exposure else None
+        result[f"WEB（品牌词搜索量）_{label}"] = brand_search
+        result[f"WEB自然量注册数_{label}"] = web_natural_reg
+        result[f"APP自然量注册数_{label}"] = app_reg
+        result[f"注册总计_{label}"] = web_natural_reg + app_reg
+        result[f"WEB自然来源新用户收入_{label}"] = float(natural_new["订单金额"].sum())
+        result[f"WEB新老用户收入（除订阅）_{label}"] = float(
+            natural_non_subscription["订单金额"].sum()
+        )
+        result[f"APP自然量收入_{label}"] = app_revenue
+        result[f"达人合作费_{label}"] = creator_cost
+        result[f"投流费_{label}"] = boost_cost
+        result[f"成本总计_{label}"] = total_cost
+        result[f"新用户ROI_{label}"] = (
+            safe_div(float(natural_new["订单金额"].sum()) + app_revenue, total_cost)
+            if total_cost else None
+        )
+    return result
+
+
+def _natural_ratio(creator_cost, boost_cost):
+    total = creator_cost + boost_cost
+    if not total:
+        return "/"
+    left = creator_cost / total * 10
+    right = boost_cost / total * 10
+    def display(value):
+        return str(int(round(value))) if abs(value - round(value)) < 0.05 else f"{value:.1f}"
+    return f"{display(left)}:{display(right)}"
+
+
+def _natural_report(dates, metrics, monthly_targets):
+    if not NATURAL_TEMPLATE.exists():
+        raise FileNotFoundError(f"找不到自然来源模板：{NATURAL_TEMPLATE}")
+    wb = load_workbook(NATURAL_TEMPLATE)
+    ws = wb.active
+    fallback_targets = {ws.cell(row, 1).value: ws.cell(row, 6).value for row in range(3, 18)}
+    row_map = {
+        3: "已发布达人数量", 4: "当周曝光", 5: "CPM",
+        6: "WEB（品牌词搜索量）", 7: "注册总计", 8: "WEB自然量注册数",
+        9: "APP自然量注册数", 10: "WEB自然来源新用户收入",
+        11: "WEB新老用户收入（除订阅）", 12: "APP自然量收入",
+        13: "成本总计", 14: "达人合作费", 15: "投流费", 17: "新用户ROI",
+    }
+    count_metrics = {
+        "已发布达人数量", "当周曝光", "WEB（品牌词搜索量）",
+        "注册总计", "WEB自然量注册数", "APP自然量注册数",
+    }
+    currency_metrics = {
+        "CPM", "WEB自然来源新用户收入", "WEB新老用户收入（除订阅）",
+        "APP自然量收入", "成本总计", "达人合作费", "投流费",
+    }
+
+    for row, metric in row_map.items():
+        values = [metrics.get(f"{metric}_本周"), metrics.get(f"{metric}_上周"), metrics.get(f"{metric}_MTD")]
+        current, previous, mtd = values
+        mom = (current - previous) / previous if previous not in (None, 0) and current is not None else None
+        target = monthly_targets.get(metric, fallback_targets.get(metric))
+        if metric == "新用户ROI" and target not in (None, "", "/"):
+            target = float(target) / 100 if float(target) > 10 else float(target)
+        completion = mtd / float(target) if mtd is not None and target not in (None, "", "/", 0) else None
+        for col, value in zip((2, 3, 4, 5, 6, 7), (current, previous, mom, mtd, target, completion)):
+            cell = ws.cell(row, col)
+            cell.value = "/" if value is None else value
+        if metric in count_metrics:
+            for col in (2, 3, 5, 6): ws.cell(row, col).number_format = "#,##0"
+        if metric in currency_metrics:
+            for col in (2, 3, 5, 6): ws.cell(row, col).number_format = '"$"#,##0.00'
+        if metric == "新用户ROI":
+            for col in (2, 3, 5, 6): ws.cell(row, col).number_format = "0%"
+        for col in (4, 7): ws.cell(row, col).number_format = "0%"
+
+    ws["B16"] = _natural_ratio(metrics["达人合作费_本周"], metrics["投流费_本周"])
+    ws["C16"] = _natural_ratio(metrics["达人合作费_上周"], metrics["投流费_上周"])
+    ws["D16"] = "/"
+    ws["E16"] = _natural_ratio(metrics["达人合作费_MTD"], metrics["投流费_MTD"])
+    ws["F16"] = "7:3"
+    ws["G16"] = "/"
+    ws["H8"] = "WEB注册端口，末次来源类型不等于SEM"
+    ws["H10"] = "WEB自然渠道末次归因且注册转化周期=0的收入"
+    ws["H11"] = "WEB自然渠道末次归因的新老用户收入，排除Auto_Renewal"
+    ws["H12"] = "APP自然量新用户收入，手动填写"
+    ws["H13"] = "成本总计：达人合作费 + 投流费"
+    ws["H16"] = "实际费用按总计10折算；目标固定为7:3"
+    ws["H17"] = "（WEB自然来源新用户收入 + APP自然量收入）÷ 成本总计"
+    ws.title = "自然来源周报"
+    return wb
+
+
 def _region_metrics(reg, orders, google, bing, start, end, region):
     countries = CORE_REGIONS[region]
     r = reg[_between(reg["注册时间"], start, end) & reg["__web"] & reg["地区"].isin(countries)]
@@ -394,16 +524,19 @@ def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs, t
     month_key = end.strftime("%Y-%m")
     monthly_all = dict(ALL_MOD.MONTHLY_TARGETS.get(month_key, {}))
     monthly_sem = dict(SEM_MOD.MONTHLY_TARGETS.get(month_key, {}))
+    monthly_natural = {}
     if MONTHLY_TARGETS_FILE.exists():
         with MONTHLY_TARGETS_FILE.open("r", encoding="utf-8") as f:
             configured_targets = json.load(f).get(month_key, {})
         monthly_all.update(configured_targets.get("all_channel", {}))
         monthly_sem.update(configured_targets.get("sem", {}))
+        monthly_natural.update(configured_targets.get("natural_source", {}))
     # 网站保存后的目标配置优先级最高，保证保存后立即生成即可生效。
     if targets:
         current_targets = targets.get(month_key, {})
         monthly_all.update(current_targets.get("all_channel", {}))
         monthly_sem.update(current_targets.get("sem", {}))
+        monthly_natural.update(current_targets.get("natural_source", {}))
 
     all_metrics = _all_metrics(reg, orders, google, bing, dates, inputs)
     all_wb = ALL_MOD.create_report(
@@ -451,9 +584,13 @@ def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs, t
     }
     region_wb = REGION_MOD.fill_other_countries_sheet(region_wb, dates, other)
 
+    natural_metrics = _natural_metrics(reg, orders, dates, inputs)
+    natural_wb = _natural_report(dates, natural_metrics, monthly_natural)
+
     stamp = f"{start:%Y.%m.%d}-{end:%Y.%m.%d}"
     return {
         f"周报-全渠道_末次归因_{stamp}.xlsx": _wb_bytes(all_wb),
         f"周报-SEM_末次归因新用户_{stamp}.xlsx": _wb_bytes(sem_wb),
         f"周报-SEM分地区（末次归因）_{stamp}.xlsx": _wb_bytes(region_wb),
+        f"周报-自然来源_{stamp}.xlsx": _wb_bytes(natural_wb),
     }, warnings

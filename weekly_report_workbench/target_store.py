@@ -53,6 +53,18 @@ SEM_TARGET_METRICS = [
     "港澳台地区消耗", "印度尼西亚地区消耗", "马来西亚消耗", "其他",
 ]
 
+NATURAL_TARGET_METRICS = [
+    "已发布达人数量", "当周曝光", "CPM", "WEB（品牌词搜索量）",
+    "注册总计", "WEB自然量注册数", "APP自然量注册数",
+    "WEB自然来源新用户收入", "WEB新老用户收入（除订阅）", "APP自然量收入",
+    "成本总计", "达人合作费", "投流费", "新用户ROI",
+]
+
+NATURAL_TARGET_ROWS = [
+    (None, "自然来源目标"),
+    *[(metric, metric) for metric in NATURAL_TARGET_METRICS],
+]
+
 # 目标维护页严格按照最终Excel的显示顺序排列。
 # 元组格式：(保存键, 页面显示名称)；保存键为None的是分区标题，不保存目标。
 ALL_CHANNEL_TARGET_ROWS = [
