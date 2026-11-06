@@ -748,7 +748,11 @@ def create_report(dates, metrics,
     # ---------- 辅助行添加函数 ----------
     def add_row(name, val_tw, val_lw, val_mtd, fmt, target_key=None, is_pct_target=False):
         mom = calc_mom(val_tw, val_lw)
-        target = get_target(target_key) if target_key else None
+        # 网站目标使用表格中显示的完整指标名。先按当前行名匹配，
+        # 再兼容旧脚本中的“SEM / 营收总计”等历史键名。
+        target = get_target(name)
+        if target is None and target_key:
+            target = get_target(target_key)
         completion = calc_completion(val_mtd, target, is_pct=is_pct_target) if target else None
         rows_data.append([
             name,
@@ -769,42 +773,44 @@ def create_report(dates, metrics,
             sdiv(metrics['D0营收_本周'], total_cost_tw),
             sdiv(metrics['D0营收_上周'], total_cost_lw),
             sdiv(metrics['D0营收_MTD'], total_cost_mtd),
-            format_pct)
+            format_pct, is_pct_target=True)
 
     add_row('WEB—新老综合ROI（除订阅）',
             sdiv(metrics['除订阅总营收_本周'], total_cost_tw),
             sdiv(metrics['除订阅总营收_上周'], total_cost_lw),
-            sdiv(metrics['除订阅总营收_MTD'], total_cost_mtd), format_pct)
+            sdiv(metrics['除订阅总营收_MTD'], total_cost_mtd), format_pct,
+            is_pct_target=True)
     add_row('WEB—新老综合ROI（含订阅）',
             sdiv(metrics['含订阅总营收_本周'], total_cost_tw),
             sdiv(metrics['含订阅总营收_上周'], total_cost_lw),
-            sdiv(metrics['含订阅总营收_MTD'], total_cost_mtd), format_pct)
+            sdiv(metrics['含订阅总营收_MTD'], total_cost_mtd), format_pct,
+            is_pct_target=True)
 
     # WEB—SEM投放新用户ROI（D7）
     add_row('WEB—SEM投放新用户ROI（D7）',
             sdiv(metrics['D7_SEM营收_本周'], sem_tw),
             sdiv(metrics['D7_SEM营收_上周'], sem_lw),
             sdiv(metrics['D7_SEM营收_MTD'], sem_mtd),
-            format_pct)
+            format_pct, is_pct_target=True)
 
     # 地区ROI：末次归因新用户地区收入 ÷ 同期地区SEM消耗。
     add_row('WEB—英语地区新用户ROI',
             sdiv(metrics['地区营收_英语_本周'], metrics['SEM消耗_英语_本周']),
             sdiv(metrics['地区营收_英语_上周'], metrics['SEM消耗_英语_上周']),
             sdiv(metrics['地区营收_英语_MTD'], metrics['SEM消耗_英语_MTD']),
-            format_pct)
+            format_pct, is_pct_target=True)
 
     add_row('WEB—繁中地区新用户ROI',
             sdiv(metrics['地区营收_繁中_本周'], metrics['SEM消耗_繁中_本周']),
             sdiv(metrics['地区营收_繁中_上周'], metrics['SEM消耗_繁中_上周']),
             sdiv(metrics['地区营收_繁中_MTD'], metrics['SEM消耗_繁中_MTD']),
-            format_pct)
+            format_pct, is_pct_target=True)
 
     add_row('WEB—其他地区新用户ROI',
             sdiv(metrics['地区营收_其他地区_本周'], metrics['SEM消耗_其他_本周']),
             sdiv(metrics['地区营收_其他地区_上周'], metrics['SEM消耗_其他_上周']),
             sdiv(metrics['地区营收_其他地区_MTD'], metrics['SEM消耗_其他_MTD']),
-            format_pct)
+            format_pct, is_pct_target=True)
 
     # ==================== 收入总览 ====================
     add_section_header('收入总览')
@@ -872,7 +878,7 @@ def create_report(dates, metrics,
             sdiv(metrics['注册PC端_本周'], pc_flow_tw),
             sdiv(metrics['注册PC端_上周'], pc_flow_lw),
             sdiv(metrics['注册PC端_MTD'], pc_flow_mtd),
-            format_pct_2decimal)
+            format_pct_2decimal, is_pct_target=True)
     add_row('新用户客单价ARPPU',
             sdiv(metrics['营收PC端_本周'], metrics['新用户付费量PC端_本周']),
             sdiv(metrics['营收PC端_上周'], metrics['新用户付费量PC端_上周']),
@@ -893,7 +899,7 @@ def create_report(dates, metrics,
             sdiv(metrics['新用户付费量PC端_本周'], pc_flow_tw),
             sdiv(metrics['新用户付费量PC端_上周'], pc_flow_lw),
             sdiv(metrics['新用户付费量PC端_MTD'], pc_flow_mtd),
-            format_pct_2decimal)
+            format_pct_2decimal, is_pct_target=True)
     add_row('退款金额', pc_refund_this_week, pc_refund_last_week, pc_refund_mtd, format_dollar, '退款金额')
 
     # ==================== H5端 ====================
@@ -910,7 +916,7 @@ def create_report(dates, metrics,
             sdiv(metrics['注册移动端_本周'], h5_flow_tw),
             sdiv(metrics['注册移动端_上周'], h5_flow_lw),
             sdiv(metrics['注册移动端_MTD'], h5_flow_mtd),
-            format_pct_2decimal)
+            format_pct_2decimal, is_pct_target=True)
     add_row('新用户客单价ARPPU',
             sdiv(metrics['营收移动端_本周'], metrics['新用户付费量移动端_本周']),
             sdiv(metrics['营收移动端_上周'], metrics['新用户付费量移动端_上周']),
@@ -931,7 +937,7 @@ def create_report(dates, metrics,
             sdiv(metrics['新用户付费量移动端_本周'], h5_flow_tw),
             sdiv(metrics['新用户付费量移动端_上周'], h5_flow_lw),
             sdiv(metrics['新用户付费量移动端_MTD'], h5_flow_mtd),
-            format_pct_2decimal)
+            format_pct_2decimal, is_pct_target=True)
 
     # 时间进度（PC订单量行，PC端第5行 = 总数据(1) + WEB(11) + 收入(5) + 产品线header(1) + 产品线4行(4) + 地区(4) + 成本(5) + PC端header(1) + PC行5 = 总行36，即index 35）
     # 改为H5订单量行

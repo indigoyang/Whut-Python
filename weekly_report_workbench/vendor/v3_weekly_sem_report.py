@@ -517,8 +517,20 @@ def create_report(dates, this_week, last_week, mtd, monthly_targets):
 
     def completion(mtd_v, tgt, ft):
         if tgt is None or tgt == 0 or mtd_v is None: return None
-        if ft in ('pct', 'pct2'): return (mtd_v * 100) / tgt
+        if ft in ('pct', 'pct2'):
+            # 网站约定百分比目标填“100”代表100%。兼容早期配置中
+            # 以“1”代表100%的写法，避免完成率被重复放大100倍。
+            target_pct = tgt * 100 if abs(tgt) <= 5 else tgt
+            return (mtd_v * 100) / target_pct
         return mtd_v / tgt
+
+    def format_target(v, ft):
+        if v is None:
+            return '-'
+        if ft in ('pct', 'pct2'):
+            target_pct = v * 100 if abs(v) <= 5 else v
+            return f"{int(round(target_pct))}%"
+        return format_val(v, ft)
 
     def fmt_comp(r):
         return f"{int(round(r * 100))}%" if r is not None else "-"
@@ -603,7 +615,7 @@ def create_report(dates, this_week, last_week, mtd, monthly_targets):
             display_name,
             format_val(v_tw, ft), format_val(v_lw, ft), fmt_mom(m),
             format_val(v_mt, ft),
-            format_val(t, ft) if t is not None else '-',
+            format_target(t, ft),
             fmt_comp(c),
             '-'
         ]
