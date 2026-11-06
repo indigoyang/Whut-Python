@@ -19,6 +19,7 @@ from rule_store import load_rules, save_rules, validate_rules
 
 
 st.set_page_config(page_title="周报—末次归因生成", page_icon="A", layout="wide", initial_sidebar_state="expanded")
+admin_mode = str(st.query_params.get("admin", "")) == "1"
 
 st.markdown("""
 <style>
@@ -89,8 +90,13 @@ html{font-size:17px}
 </style>
 """, unsafe_allow_html=True)
 
+if not admin_mode:
+    st.markdown("<style>.st-key-admin_settings{display:none!important}</style>", unsafe_allow_html=True)
+
 with st.sidebar:
-    st.markdown("""<div class="brand-mark" title="周报生成器">A</div><a class="nav-link active" href="#upload-data" title="上传数据">⇧</a><a class="nav-link" href="#manual-data" title="补充数据">＋</a><a class="nav-link" href="#report-result" title="生成结果">▦</a><a class="nav-link" href="#help" title="使用说明">?</a><div class="nav-space"></div><div class="nav-hint">WEEKLY<br>REPORT</div>""", unsafe_allow_html=True)
+    admin_link = "./" if admin_mode else "?admin=1#manual-data"
+    admin_title = "退出管理模式" if admin_mode else "管理设置"
+    st.markdown(f"""<div class="brand-mark" title="周报生成器">A</div><a class="nav-link active" href="#upload-data" title="上传数据">⇧</a><a class="nav-link" href="#manual-data" title="补充数据">＋</a><a class="nav-link" href="#report-result" title="生成结果">▦</a><a class="nav-link" href="{admin_link}" title="{admin_title}">⚙</a><a class="nav-link" href="#help" title="使用说明">?</a><div class="nav-space"></div><div class="nav-hint">WEEKLY<br>REPORT</div>""", unsafe_allow_html=True)
 
 st.markdown("""<header class="topbar"><div class="eyebrow">Weekly Report Generator</div><h1>周报—末次归因生成</h1><p>上传数据，自动完成校验、归因计算并生成三份可编辑周报</p><div class="steps"><div class="step done"><b>✓</b>选择周期</div><div class="step-line"></div><div class="step on"><b>02</b>上传数据</div><div class="step-line"></div><div class="step"><b>03</b>补充信息</div><div class="step-line"></div><div class="step"><b>04</b>生成报告</div></div></header><div id="upload-data"></div>""", unsafe_allow_html=True)
 
@@ -186,7 +192,8 @@ with main_col:
             except Exception as exc:
                 st.error(str(exc))
 
-    with st.expander("统计规则设置（口径变更时修改）", expanded=False):
+    admin_settings = st.container(key="admin_settings")
+    with admin_settings.expander("统计规则设置（口径变更时修改）", expanded=False):
         rules = load_rules()
         st.caption(
             "这里修改的是团队共用统计口径。保存后将写入 GitHub；建议先写清变更说明，"
@@ -306,7 +313,7 @@ with main_col:
                 except Exception as exc:
                     st.error(str(exc))
 
-    with st.expander("当前统计口径说明（团队必读）", expanded=False):
+    with admin_settings.expander("当前统计口径说明（团队必读）", expanded=False):
         metric_doc = Path(__file__).resolve().parent / "config" / "统计口径说明.md"
         if metric_doc.exists():
             st.markdown(metric_doc.read_text(encoding="utf-8"))
