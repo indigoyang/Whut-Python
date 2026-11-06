@@ -135,7 +135,6 @@ with main_col:
             f"当前维护月份：{month_key}。金额、人数直接填数值；百分比目标按百分数填写，"
             "例如75%填写75。保存后所有用户默认使用这组目标。"
         )
-        admin_password = st.text_input("目标管理密码", type="password", key="target_admin_password")
         target_tab_all, target_tab_sem = st.tabs(["全渠道目标", "SEM目标"])
 
         def target_editor(tab, metrics, values, key):
@@ -166,29 +165,23 @@ with main_col:
         )
 
         if st.button("保存本月目标", type="primary", key="save_monthly_targets"):
-            expected_password = st.secrets.get("target_admin_password", "")
-            if not expected_password:
-                st.error("尚未在 Streamlit Secrets 中设置 target_admin_password。")
-            elif admin_password != expected_password:
-                st.error("目标管理密码不正确。")
-            else:
-                def clean(frame):
-                    result = {}
-                    for row in frame.to_dict("records"):
-                        value = row.get("目标")
-                        if value is not None and not pd.isna(value):
-                            result[row["指标"]] = float(value)
-                    return result
+            def clean(frame):
+                result = {}
+                for row in frame.to_dict("records"):
+                    value = row.get("目标")
+                    if value is not None and not pd.isna(value):
+                        result[row["指标"]] = float(value)
+                return result
 
-                all_targets[month_key] = {
-                    "all_channel": clean(edited_all),
-                    "sem": clean(edited_sem),
-                }
-                try:
-                    save_targets(all_targets, st.secrets)
-                    st.success(f"{month_key}目标已保存，之后会默认使用。")
-                except Exception as exc:
-                    st.error(str(exc))
+            all_targets[month_key] = {
+                "all_channel": clean(edited_all),
+                "sem": clean(edited_sem),
+            }
+            try:
+                save_targets(all_targets, st.secrets)
+                st.success(f"{month_key}目标已保存，之后会默认使用。")
+            except Exception as exc:
+                st.error(str(exc))
 
 with side_col:
     st.markdown('<div class="panel"><div class="panel-title">报告信息<span>自动保存</span></div>', unsafe_allow_html=True)
