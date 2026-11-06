@@ -750,9 +750,9 @@ def create_report(dates, metrics,
         mom = calc_mom(val_tw, val_lw)
         # 网站目标使用表格中显示的完整指标名。先按当前行名匹配，
         # 再兼容旧脚本中的“SEM / 营收总计”等历史键名。
-        target = get_target(name)
+        target = get_target(target_key) if target_key else get_target(name)
         if target is None and target_key:
-            target = get_target(target_key)
+            target = get_target(name)
         completion = calc_completion(val_mtd, target, is_pct=is_pct_target) if target else None
         rows_data.append([
             name,
@@ -871,36 +871,39 @@ def create_report(dates, metrics,
     pc_flow_lw = metrics['PC流量_上周']
     pc_flow_mtd = metrics['PC流量_MTD']
 
-    add_row('流量', pc_flow_tw, pc_flow_lw, pc_flow_mtd, format_int)
+    add_row('流量', pc_flow_tw, pc_flow_lw, pc_flow_mtd, format_int, 'PC—流量')
     add_row('新增注册',
-            metrics['注册PC端_本周'], metrics['注册PC端_上周'], metrics['注册PC端_MTD'], format_int)
+            metrics['注册PC端_本周'], metrics['注册PC端_上周'], metrics['注册PC端_MTD'], format_int,
+            'PC—新增注册')
     add_row('注册率',
             sdiv(metrics['注册PC端_本周'], pc_flow_tw),
             sdiv(metrics['注册PC端_上周'], pc_flow_lw),
             sdiv(metrics['注册PC端_MTD'], pc_flow_mtd),
-            format_pct_2decimal, is_pct_target=True)
+            format_pct_2decimal, 'PC—注册率', is_pct_target=True)
     add_row('新用户客单价ARPPU',
             sdiv(metrics['营收PC端_本周'], metrics['新用户付费量PC端_本周']),
             sdiv(metrics['营收PC端_上周'], metrics['新用户付费量PC端_上周']),
             sdiv(metrics['营收PC端_MTD'], metrics['新用户付费量PC端_MTD']),
-            format_dollar, '客单价')
+            format_dollar, 'PC—新用户客单价ARPPU')
     add_row('新用户订单量',
-            metrics['新用户付费量PC端_本周'], metrics['新用户付费量PC端_上周'], metrics['新用户付费量PC端_MTD'], format_int, '订单量')
+            metrics['新用户付费量PC端_本周'], metrics['新用户付费量PC端_上周'], metrics['新用户付费量PC端_MTD'], format_int,
+            'PC—新用户订单量')
     add_row('新用户营收',
-            metrics['营收PC端_本周'], metrics['营收PC端_上周'], metrics['营收PC端_MTD'], format_dollar)
-    add_row('新老用户营收（除订阅）', metrics['除订阅营收PC端_本周'], metrics['除订阅营收PC端_上周'], metrics['除订阅营收PC端_MTD'], format_dollar)
-    add_row('新老用户营收（含订阅）', metrics['除订阅营收PC端_本周'] + metrics['订阅营收PC端_本周'], metrics['除订阅营收PC端_上周'] + metrics['订阅营收PC端_上周'], metrics['除订阅营收PC端_MTD'] + metrics['订阅营收PC端_MTD'], format_dollar)
+            metrics['营收PC端_本周'], metrics['营收PC端_上周'], metrics['营收PC端_MTD'], format_dollar,
+            'PC—新用户营收')
+    add_row('新老用户营收（除订阅）', metrics['除订阅营收PC端_本周'], metrics['除订阅营收PC端_上周'], metrics['除订阅营收PC端_MTD'], format_dollar, 'PC—新老用户营收（除订阅）')
+    add_row('新老用户营收（含订阅）', metrics['除订阅营收PC端_本周'] + metrics['订阅营收PC端_本周'], metrics['除订阅营收PC端_上周'] + metrics['订阅营收PC端_上周'], metrics['除订阅营收PC端_MTD'] + metrics['订阅营收PC端_MTD'], format_dollar, 'PC—新老用户营收（含订阅）')
     add_row('新用户注册付费率',
             sdiv(metrics['新用户付费量PC端_本周'], metrics['注册PC端_本周']),
             sdiv(metrics['新用户付费量PC端_上周'], metrics['注册PC端_上周']),
             sdiv(metrics['新用户付费量PC端_MTD'], metrics['注册PC端_MTD']),
-            format_pct_2decimal, 'PC端', is_pct_target=True)
+            format_pct_2decimal, 'PC—新用户注册付费率', is_pct_target=True)
     add_row('付费率 (流量口径)',
             sdiv(metrics['新用户付费量PC端_本周'], pc_flow_tw),
             sdiv(metrics['新用户付费量PC端_上周'], pc_flow_lw),
             sdiv(metrics['新用户付费量PC端_MTD'], pc_flow_mtd),
-            format_pct_2decimal, is_pct_target=True)
-    add_row('退款金额', pc_refund_this_week, pc_refund_last_week, pc_refund_mtd, format_dollar, '退款金额')
+            format_pct_2decimal, 'PC—付费率 (流量口径)', is_pct_target=True)
+    add_row('退款金额', pc_refund_this_week, pc_refund_last_week, pc_refund_mtd, format_dollar, 'PC—退款金额')
 
     # ==================== H5端 ====================
     add_section_header('H5')
@@ -909,35 +912,38 @@ def create_report(dates, metrics,
     h5_flow_lw = metrics['H5流量_上周']
     h5_flow_mtd = metrics['H5流量_MTD']
 
-    add_row('流量', h5_flow_tw, h5_flow_lw, h5_flow_mtd, format_int)
+    add_row('流量', h5_flow_tw, h5_flow_lw, h5_flow_mtd, format_int, 'H5—流量')
     add_row('新增注册',
-            metrics['注册移动端_本周'], metrics['注册移动端_上周'], metrics['注册移动端_MTD'], format_int)
+            metrics['注册移动端_本周'], metrics['注册移动端_上周'], metrics['注册移动端_MTD'], format_int,
+            'H5—新增注册')
     add_row('注册率',
             sdiv(metrics['注册移动端_本周'], h5_flow_tw),
             sdiv(metrics['注册移动端_上周'], h5_flow_lw),
             sdiv(metrics['注册移动端_MTD'], h5_flow_mtd),
-            format_pct_2decimal, is_pct_target=True)
+            format_pct_2decimal, 'H5—注册率', is_pct_target=True)
     add_row('新用户客单价ARPPU',
             sdiv(metrics['营收移动端_本周'], metrics['新用户付费量移动端_本周']),
             sdiv(metrics['营收移动端_上周'], metrics['新用户付费量移动端_上周']),
             sdiv(metrics['营收移动端_MTD'], metrics['新用户付费量移动端_MTD']),
-            format_dollar)
+            format_dollar, 'H5—新用户客单价ARPPU')
     add_row('新用户订单量',
-            metrics['新用户付费量移动端_本周'], metrics['新用户付费量移动端_上周'], metrics['新用户付费量移动端_MTD'], format_int)
+            metrics['新用户付费量移动端_本周'], metrics['新用户付费量移动端_上周'], metrics['新用户付费量移动端_MTD'], format_int,
+            'H5—新用户订单量')
     add_row('新用户营收',
-            metrics['营收移动端_本周'], metrics['营收移动端_上周'], metrics['营收移动端_MTD'], format_dollar)
-    add_row('新老用户营收（除订阅）', metrics['除订阅营收移动端_本周'], metrics['除订阅营收移动端_上周'], metrics['除订阅营收移动端_MTD'], format_dollar)
-    add_row('新老用户营收（含订阅）', metrics['除订阅营收移动端_本周'] + metrics['订阅营收移动端_本周'], metrics['除订阅营收移动端_上周'] + metrics['订阅营收移动端_上周'], metrics['除订阅营收移动端_MTD'] + metrics['订阅营收移动端_MTD'], format_dollar)
+            metrics['营收移动端_本周'], metrics['营收移动端_上周'], metrics['营收移动端_MTD'], format_dollar,
+            'H5—新用户营收')
+    add_row('新老用户营收（除订阅）', metrics['除订阅营收移动端_本周'], metrics['除订阅营收移动端_上周'], metrics['除订阅营收移动端_MTD'], format_dollar, 'H5—新老用户营收（除订阅）')
+    add_row('新老用户营收（含订阅）', metrics['除订阅营收移动端_本周'] + metrics['订阅营收移动端_本周'], metrics['除订阅营收移动端_上周'] + metrics['订阅营收移动端_上周'], metrics['除订阅营收移动端_MTD'] + metrics['订阅营收移动端_MTD'], format_dollar, 'H5—新老用户营收（含订阅）')
     add_row('新用户注册付费率',
             sdiv(metrics['新用户付费量移动端_本周'], metrics['注册移动端_本周']),
             sdiv(metrics['新用户付费量移动端_上周'], metrics['注册移动端_上周']),
             sdiv(metrics['新用户付费量移动端_MTD'], metrics['注册移动端_MTD']),
-            format_pct_2decimal, '移动端', is_pct_target=True)
+            format_pct_2decimal, 'H5—新用户注册付费率', is_pct_target=True)
     add_row('付费率 (流量口径)',
             sdiv(metrics['新用户付费量移动端_本周'], h5_flow_tw),
             sdiv(metrics['新用户付费量移动端_上周'], h5_flow_lw),
             sdiv(metrics['新用户付费量移动端_MTD'], h5_flow_mtd),
-            format_pct_2decimal, is_pct_target=True)
+            format_pct_2decimal, 'H5—付费率 (流量口径)', is_pct_target=True)
 
     # 时间进度（PC订单量行，PC端第5行 = 总数据(1) + WEB(11) + 收入(5) + 产品线header(1) + 产品线4行(4) + 地区(4) + 成本(5) + PC端header(1) + PC行5 = 总行36，即index 35）
     # 改为H5订单量行
