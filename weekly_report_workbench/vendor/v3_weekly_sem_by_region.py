@@ -3,7 +3,7 @@
 """
 SEM周报-分地区脚本（末次归因）
 把 v2_weekly_sem_report.py 中各地区数据拆开展示
-格式对齐：/Users/yangyingyi/Desktop/周报SEM分地区-新.xlsx
+格式对齐：/Users/yangyingyi/Desktop/格式.xlsx
 """
 
 import importlib.util
@@ -72,7 +72,7 @@ def load_config():
     return db_config, template_path, output_dir
 
 # ============== 地区定义 ==============
-REGIONS = ['印度', '美国', '港澳台', '印度尼西亚', '马来西亚']
+REGIONS = ['印度', '美国', '港澳台']
 
 SEM_LAST_ATTRIBUTION_CONDITION = """
 NULLIF(TRIM(COALESCE(合作渠道, '')), '') IS NULL
@@ -84,8 +84,6 @@ COUNTRY_MAP = {
     '美国': ['美国'],
     '印度': ['印度'],
     '港澳台': ['中国香港', '中国澳门', '中国台湾'],
-    '印度尼西亚': ['印度尼西亚'],
-    '马来西亚': ['马来西亚'],
 }
 
 # Google消耗：地理位置字段值
@@ -93,8 +91,6 @@ GOOGLE_GEO_MAP = {
     '美国': ['美国'],
     '印度': ['印度'],
     '港澳台': ['台湾', '香港', '澳门'],
-    '印度尼西亚': ['印度尼西亚'],
-    '马来西亚': ['马来西亚'],
 }
 
 # Bing消耗：region字段值
@@ -102,68 +98,23 @@ BING_REGION_MAP = {
     '美国': ['United States'],
     '印度': ['India'],
     '港澳台': ['Taiwan', 'Hong Kong SAR', 'Macao SAR'],
-    '印度尼西亚': ['Indonesia'],
-    '马来西亚': ['Malaysia'],
 }
 
 # ============== 其他国家拆分 ==============
-# 排除三个核心地区；印尼、马来等其余国家仍会进入“其他国家-本周”工作表。
+# 主表只保留三个核心地区；以下六个国家单独进入“其他国家-本周”。
 OTHER_COUNTRY_EXCLUSIONS = {'美国', '印度', '中国香港', '中国澳门', '中国台湾'}
+OTHER_COUNTRIES = ['印度尼西亚', '日本', '墨西哥', '阿联酋', '马来西亚', '巴西']
 
 # 订单/注册表使用中文国家名，Google大多使用中文，Bing使用英文。
 # 未配置的中文国家仍会展示注册/订单/营收，并尝试用相同中文名匹配Google；
 # Bing消耗只有配置了英文映射后才能合并。
 OTHER_COUNTRY_AD_MAP = {
-    '英国': (['英国'], ['United Kingdom']),
-    '澳大利亚': (['澳大利亚'], ['Australia']),
-    '加拿大': (['加拿大'], ['Canada']),
     '印度尼西亚': (['印度尼西亚'], ['Indonesia']),
-    '马来西亚': (['马来西亚'], ['Malaysia']),
-    '菲律宾': (['菲律宾'], ['Philippines']),
-    '巴西': (['巴西'], ['Brazil']),
     '日本': (['日本'], ['Japan']),
-    '秘鲁': (['秘鲁'], ['Peru']),
-    '阿根廷': (['阿根廷'], ['Argentina']),
     '墨西哥': (['墨西哥'], ['Mexico']),
-    '葡萄牙': (['葡萄牙'], ['Portugal']),
-    '智利': (['智利'], ['Chile']),
-    '厄瓜多尔': (['厄瓜多尔'], ['Ecuador']),
-    '新加坡': (['新加坡'], ['Singapore']),
-    '巴拿马': (['巴拿马'], ['Panama']),
-    '西班牙': (['西班牙'], ['Spain']),
-    '法国': (['法国'], ['France']),
-    '德国': (['德国'], ['Germany']),
-    '玻利维亚': (['玻利维亚'], ['Bolivia']),
-    '危地马拉': (['危地马拉'], ['Guatemala']),
-    '泰国': (['泰国'], ['Thailand']),
-    '牙买加': (['牙买加'], ['Jamaica']),
-    '乌拉圭': (['乌拉圭'], ['Uruguay']),
-    '多米尼加': (['多米尼加共和国', '多米尼加'], ['Dominican Republic']),
-    '哥伦比亚': (['哥伦比亚'], ['Colombia']),
-    '韩国': (['韩国'], ['South Korea', 'Republic of Korea']),
-    '特立尼达和多巴哥': (['特立尼达和多巴哥'], ['Trinidad and Tobago']),
-    '萨尔瓦多': (['萨尔瓦多'], ['El Salvador']),
-    '俄罗斯': (['俄罗斯'], ['Russia']),
-    '委内瑞拉': (['委内瑞拉'], ['Venezuela']),
-    '洪都拉斯': (['洪都拉斯'], ['Honduras']),
-    '巴拉圭': (['巴拉圭'], ['Paraguay']),
-    '尼加拉瓜': (['尼加拉瓜'], ['Nicaragua']),
-    '越南': (['越南'], ['Vietnam']),
-    '沙特': (['沙特阿拉伯', '沙特'], ['Saudi Arabia']),
     '阿联酋': (['阿拉伯联合酋长国', '阿联酋'], ['United Arab Emirates']),
-    '荷兰': (['荷兰'], ['Netherlands']),
-    '缅甸': (['缅甸'], ['Myanmar']),
-    '土耳其': (['土耳其'], ['Türkiye', 'Turkey']),
-    '埃及': (['埃及'], ['Egypt']),
-    '卡塔尔': (['卡塔尔'], ['State of Qatar', 'Qatar']),
-    '瑞典': (['瑞典'], ['Sweden']),
-    '科威特': (['科威特'], ['Kuwait']),
-    '柬埔寨': (['柬埔寨'], ['Kingdom of Cambodia', 'Cambodia']),
-    '巴基斯坦': (['巴基斯坦'], ['Pakistan']),
-    '瑞士': (['瑞士'], ['Switzerland']),
-    '意大利': (['意大利'], ['Italy']),
-    '黎巴嫩': (['黎巴嫩'], ['Lebanon']),
-    '老挝': (['老挝'], ['Laos']),
+    '马来西亚': (['马来西亚'], ['Malaysia']),
+    '巴西': (['巴西'], ['Brazil']),
 }
 
 # 通用指标；只有印度、美国、港澳台额外增加“全渠道新用户ROI”。
@@ -179,10 +130,8 @@ ALL_CHANNEL_ROI_REGIONS = {'印度', '美国', '港澳台'}
 # 每地区仍占17行；三个核心地区会多使用一行展示全渠道新用户ROI。
 REGION_ROW_OFFSETS = {
     '印度': 2,
-    '美国': 19,
-    '港澳台': 36,
-    '印度尼西亚': 53,
-    '马来西亚': 70,
+    '美国': 21,
+    '港澳台': 40,
 }
 
 # 模板中的地区标题名（与 REGIONS 键名可能不同）
@@ -190,8 +139,6 @@ REGION_HEADER_TITLES = {
     '印度': 'SEM-印度',
     '美国': 'SEM-美国',
     '港澳台': 'SEM-港澳台',
-    '印度尼西亚': 'SEM-印尼',
-    '马来西亚': 'SEM-马来',
 }
 
 # 每个指标对应的 Excel 数字格式（强制覆盖模板旧格式）
@@ -707,46 +654,7 @@ def fill_report(wb, dates, this_week_data, last_week_data, mtd_data, cumulative_
 
 
 def extend_region_template(wb):
-    """按港澳台区块样式补齐模板中缺少的印尼、马来西亚区块。"""
-    ws = wb.active
-    source_start = REGION_ROW_OFFSETS['港澳台'] - 1  # 标题行35
-    block_height = 17
-    source_end = source_start + block_height - 1
-
-    for region_name in ('印度尼西亚', '马来西亚'):
-        target_start = REGION_ROW_OFFSETS[region_name] - 1
-        row_shift = target_start - source_start
-
-        for source_row in range(source_start, source_end + 1):
-            target_row = source_row + row_shift
-            ws.row_dimensions[target_row].height = ws.row_dimensions[source_row].height
-            for col in range(1, 9):
-                source_cell = ws.cell(row=source_row, column=col)
-                target_cell = ws.cell(row=target_row, column=col)
-                target_cell.value = source_cell.value
-                if source_cell.has_style:
-                    target_cell._style = copy(source_cell._style)
-                if source_cell.number_format:
-                    target_cell.number_format = source_cell.number_format
-                target_cell.alignment = copy(source_cell.alignment)
-                target_cell.protection = copy(source_cell.protection)
-
-    # 指标增加一行后，统一调整各地区H列的时间进度合并范围。
-    for region_name in REGIONS:
-        merge_start = REGION_ROW_OFFSETS[region_name]
-        metric_count = len(METRICS) + (
-            1 if region_name in ALL_CHANNEL_ROI_REGIONS else 0
-        )
-        merge_end = merge_start + metric_count - 1
-        for merged in list(ws.merged_cells.ranges):
-            if (
-                merged.min_col == merged.max_col == 8
-                and merged.min_row <= merge_end
-                and merged.max_row >= merge_start
-            ):
-                ws.unmerge_cells(str(merged))
-        ws.merge_cells(f'H{merge_start}:H{merge_end}')
-
+    """格式.xlsx 已包含三个核心地区，不再插行或复制区块。"""
     return wb
 
 

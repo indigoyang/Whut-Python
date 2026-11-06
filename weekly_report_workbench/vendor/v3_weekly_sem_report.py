@@ -403,7 +403,7 @@ def create_report(dates, this_week, last_week, mtd, monthly_targets):
     ws['A2'].font = Font(size=12)
     ws['A2'].alignment = center_align
 
-    headers = ['指标', '本周', '上周', '环比', '累计', '目标', '完成率', '时间进度']
+    headers = ['指标', '本周', '上周', '环比', 'MTD', '目标', '完成率', '时间进度']
     for col, h in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col, value=h)
         cell.font = header_font_white

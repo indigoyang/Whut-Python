@@ -627,7 +627,7 @@ def create_report(dates, metrics,
     ws['A2'].alignment = center_align
 
     # 表头
-    headers = ['指标', '本周', '上周', '环比', '累计', '目标', '完成率', '时间进度']
+    headers = ['指标', '本周', '上周', '环比', 'MTD', '目标', '完成率', '时间进度']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col, value=header)
         cell.font = header_font_white

@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from importlib.util import module_from_spec, spec_from_file_location
 from io import BytesIO
 from pathlib import Path
+import json
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -17,6 +18,7 @@ from report_engine import blank_mask, prepare_data, safe_div, web_mask
 ROOT = Path(__file__).resolve().parent
 WEEKLY = ROOT / "vendor"
 REGION_TEMPLATE = ROOT / "assets" / "周报SEM分地区-新.xlsx"
+MONTHLY_TARGETS_FILE = ROOT / "config" / "monthly_targets.json"
 
 ENGLISH = {
     "美国", "英国", "澳大利亚", "加拿大", "印度", "其他", "越南", "沙特", "沙特阿拉伯",
@@ -299,8 +301,14 @@ def _simplify_region_main_sheet(ws):
 def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs):
     reg, orders, google, bing, warnings = _prepare(reg, orders, google, bing)
     dates = _dates(start, end)
-    monthly_all = ALL_MOD.MONTHLY_TARGETS.get(end.strftime("%Y-%m"), {})
-    monthly_sem = SEM_MOD.MONTHLY_TARGETS.get(end.strftime("%Y-%m"), {})
+    month_key = end.strftime("%Y-%m")
+    monthly_all = dict(ALL_MOD.MONTHLY_TARGETS.get(month_key, {}))
+    monthly_sem = dict(SEM_MOD.MONTHLY_TARGETS.get(month_key, {}))
+    if MONTHLY_TARGETS_FILE.exists():
+        with MONTHLY_TARGETS_FILE.open("r", encoding="utf-8") as f:
+            configured_targets = json.load(f).get(month_key, {})
+        monthly_all.update(configured_targets.get("all_channel", {}))
+        monthly_sem.update(configured_targets.get("sem", {}))
 
     all_metrics = _all_metrics(reg, orders, google, bing, dates, inputs)
     all_wb = ALL_MOD.create_report(
@@ -337,16 +345,12 @@ def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs):
             cumulative[region].update({"all_channel_reg":len(cr),"all_channel_new_user_orders":len(all_new),"all_channel_new_user_rate":safe_div(len(all_new),len(cr))})
     region_wb = REGION_MOD.fill_report(region_wb, dates, region_sets["本周"], region_sets["上周"], region_sets["MTD"], cumulative)
     _simplify_region_main_sheet(region_wb.active)
-    # 其他国家页与原脚本一致：排除美国、印度和港澳台，按新增注册数排序。
-    excluded = {"美国", "印度", *TRADITIONAL}
-    countries = sorted(
-        (set(reg["地区"].dropna()) | set(orders["地区"].dropna())) - excluded - {"", "__x"}
-    )
+    # 其他国家页固定顺序，只展示业务要求的六个地区。
+    countries = REGION_MOD.OTHER_COUNTRIES
     other = {
         country: _country_metrics(reg, orders, google, bing, dates["this_week_start"], dates["this_week_end"], country)
         for country in countries
     }
-    other = dict(sorted(other.items(), key=lambda item: item[1].get("新增注册", 0), reverse=True))
     region_wb = REGION_MOD.fill_other_countries_sheet(region_wb, dates, other)
 
     stamp = f"{start:%Y.%m.%d}-{end:%Y.%m.%d}"
