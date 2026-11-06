@@ -11,7 +11,9 @@ from report_engine import read_uploads
 from v3_report_engine import generate_v3_reports
 from target_store import (
     ALL_CHANNEL_TARGET_METRICS,
+    ALL_CHANNEL_TARGET_ROWS,
     SEM_TARGET_METRICS,
+    SEM_TARGET_ROWS,
     load_targets,
     save_targets,
 )
@@ -146,14 +148,22 @@ with main_col:
         )
         target_tab_all, target_tab_sem = st.tabs(["全渠道目标", "SEM目标"])
 
-        def target_editor(tab, metrics, values, key):
+        def target_editor(tab, rows_config, values, key):
             rows = pd.DataFrame(
-                [{"指标": metric, "目标": values.get(metric)} for metric in metrics]
+                [
+                    {"_目标键": metric_key or "", "指标": label,
+                     "目标": values.get(metric_key) if metric_key else None}
+                    for metric_key, label in rows_config
+                ]
             )
             with tab:
+                st.caption(
+                    f"共 {len(rows_config)} 行；灰色分区标题只用于对应Excel结构，不保存目标。"
+                )
                 return st.data_editor(
                     rows,
                     column_config={
+                        "_目标键": None,
                         "指标": st.column_config.TextColumn("指标", disabled=True),
                         "目标": st.column_config.NumberColumn("目标", min_value=0.0, format="%.2f"),
                     },
@@ -165,11 +175,11 @@ with main_col:
                 )
 
         edited_all = target_editor(
-            target_tab_all, ALL_CHANNEL_TARGET_METRICS,
+            target_tab_all, ALL_CHANNEL_TARGET_ROWS,
             month_targets.get("all_channel", {}), f"all_targets_{month_key}"
         )
         edited_sem = target_editor(
-            target_tab_sem, SEM_TARGET_METRICS,
+            target_tab_sem, SEM_TARGET_ROWS,
             month_targets.get("sem", {}), f"sem_targets_{month_key}"
         )
 
@@ -178,8 +188,9 @@ with main_col:
                 result = {}
                 for row in frame.to_dict("records"):
                     value = row.get("目标")
-                    if value is not None and not pd.isna(value):
-                        result[row["指标"]] = float(value)
+                    metric_key = str(row.get("_目标键", "")).strip()
+                    if metric_key and value is not None and not pd.isna(value):
+                        result[metric_key] = float(value)
                 return result
 
             all_targets[month_key] = {
