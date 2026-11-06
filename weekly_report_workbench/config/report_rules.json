@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "updated_at": "",
+  "updated_by": "",
+  "change_note": "默认规则，与当前周报口径一致",
+  "fields": {
+    "registration": {
+      "注册时间": "注册时间",
+      "注册端口": "注册端口",
+      "注册地区": "注册地区",
+      "渠道类型": "渠道类型",
+      "广告来源": "广告来源"
+    },
+    "orders": {
+      "订单生成时间": "订单生成时间",
+      "支付时间": "支付时间",
+      "用户注册时间": "用户注册时间",
+      "支付端口": "支付端口",
+      "国家": "国家",
+      "订单金额": "兑换美元",
+      "注册转化周期": "注册转化周期",
+      "合作渠道": "合作渠道",
+      "末次来源": "末次来源",
+      "末次来源类型": "末次来源类型",
+      "渠道类型": "渠道类型",
+      "支付位置": "支付位置"
+    },
+    "google": {
+      "天": "天",
+      "地理位置": "相符的地理位置",
+      "广告系列": "广告系列",
+      "费用": "费用"
+    },
+    "bing": {
+      "stat_date": "日期",
+      "region": "国家/地区（实际位置）",
+      "ad_campaign": "广告活动",
+      "cost": "花费"
+    }
+  },
+  "new_user": {
+    "field": "注册转化周期",
+    "value": 0
+  },
+  "subscription": {
+    "source_values": ["AUTO_RENEWAL"]
+  },
+  "channels": {
+    "cooperation_priority": [
+      {"prefix": "KOL", "channel": "KOL"},
+      {"prefix": "AFFILIATE", "channel": "Affiliate"}
+    ],
+    "blank_cooperation_sources": {
+      "SEM": ["SEM"],
+      "KOL": ["KOL", "DIRECT", "SOCIAL_ORGANIC"],
+      "Affiliate": ["AFFILIATE"],
+      "Auto_Renewal": ["AUTO_RENEWAL"],
+      "Unassigned": ["UNASSIGNED"],
+      "Blank": [""]
+    },
+    "default_channel": "SEO"
+  },
+  "sem_cost": {
+    "google_exclude_contains": ["KOL", "generic"]
+  },
+  "regions": {
+    "english": ["美国", "英国", "澳大利亚", "加拿大", "印度", "其他", "越南", "沙特", "沙特阿拉伯", "阿联酋", "阿拉伯联合酋长国", "荷兰", "缅甸", "土耳其", "埃及", "卡塔尔", "瑞典", "科威特", "柬埔寨", "巴基斯坦", "瑞士", "意大利"],
+    "traditional": ["中国香港", "中国澳门", "中国台湾", "香港", "澳门", "台湾", "港澳台"],
+    "north_america": ["美国", "加拿大"]
+  }
+}
