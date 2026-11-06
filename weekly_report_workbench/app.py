@@ -1,4 +1,6 @@
 from datetime import date, timedelta
+from copy import deepcopy
+from pathlib import Path
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -13,6 +15,7 @@ from target_store import (
     load_targets,
     save_targets,
 )
+from rule_store import load_rules, save_rules, validate_rules
 
 
 st.set_page_config(page_title="周报—末次归因生成", page_icon="A", layout="wide", initial_sidebar_state="expanded")
@@ -183,6 +186,133 @@ with main_col:
             except Exception as exc:
                 st.error(str(exc))
 
+    with st.expander("统计规则设置（口径变更时修改）", expanded=False):
+        rules = load_rules()
+        st.caption(
+            "这里修改的是团队共用统计口径。保存后将写入 GitHub；建议先写清变更说明，"
+            "并用同一周期生成新旧报告核对。"
+        )
+
+        def csv_text(values):
+            return "，".join(str(v) for v in (values or []))
+
+        def csv_values(value, keep_blank=False):
+            values = [v.strip() for v in str(value).replace("，", ",").split(",")]
+            return values if keep_blank else [v for v in values if v]
+
+        field_tabs = st.tabs(["字段对应", "用户与渠道", "消耗与地区"])
+        field_frames = {}
+        field_names = {
+            "registration": "注册数据", "orders": "订单数据",
+            "google": "Google消耗", "bing": "Bing消耗",
+        }
+        with field_tabs[0]:
+            st.info("左列是系统标准字段，不要修改；右列填写上传文件中的真实表头。")
+            for group, title in field_names.items():
+                st.markdown(f"**{title}**")
+                mapping = rules.get("fields", {}).get(group, {})
+                frame = pd.DataFrame([
+                    {"系统标准字段": canonical, "上传文件字段": source}
+                    for canonical, source in mapping.items()
+                ])
+                field_frames[group] = st.data_editor(
+                    frame,
+                    disabled=["系统标准字段"], hide_index=True,
+                    use_container_width=True, key=f"rule_fields_{group}",
+                )
+
+        with field_tabs[1]:
+            new_user_field = st.text_input(
+                "新用户判断字段", rules.get("new_user", {}).get("field", "注册转化周期")
+            )
+            new_user_value = st.number_input(
+                "新用户判断值", value=float(rules.get("new_user", {}).get("value", 0)), step=1.0
+            )
+            subscription_values = st.text_input(
+                "续费对应的末次来源类型（多个用逗号隔开）",
+                csv_text(rules.get("subscription", {}).get("source_values", ["AUTO_RENEWAL"])),
+            )
+            priorities = rules.get("channels", {}).get("cooperation_priority", [])
+            priority_map = {item.get("channel"): item.get("prefix", "") for item in priorities}
+            kol_prefix = st.text_input("KOL合作渠道前缀", priority_map.get("KOL", "KOL"))
+            affiliate_prefix = st.text_input("Affiliate合作渠道前缀", priority_map.get("Affiliate", "AFFILIATE"))
+            source_rules = rules.get("channels", {}).get("blank_cooperation_sources", {})
+            source_inputs = {}
+            for channel in ["SEM", "KOL", "Affiliate", "Unassigned"]:
+                source_inputs[channel] = st.text_input(
+                    f"合作渠道为空时，{channel}对应末次来源类型",
+                    csv_text(source_rules.get(channel, [])), key=f"source_rule_{channel}",
+                )
+            default_channel = st.selectbox(
+                "其他未匹配来源默认归类",
+                ["SEO", "KOL", "SEM", "Affiliate", "Unassigned", "Blank"],
+                index=["SEO", "KOL", "SEM", "Affiliate", "Unassigned", "Blank"].index(
+                    rules.get("channels", {}).get("default_channel", "SEO")
+                ),
+            )
+
+        with field_tabs[2]:
+            google_excludes = st.text_input(
+                "Google广告系列排除词（多个用逗号隔开）",
+                csv_text(rules.get("sem_cost", {}).get("google_exclude_contains", ["KOL", "generic"])),
+            )
+            region_rules = rules.get("regions", {})
+            english_regions = st.text_area("英语地区国家", csv_text(region_rules.get("english", [])))
+            traditional_regions = st.text_area("繁中地区国家", csv_text(region_rules.get("traditional", [])))
+            north_america_regions = st.text_input("北美地区国家", csv_text(region_rules.get("north_america", ["美国", "加拿大"])))
+
+        editor_name = st.text_input("修改人", value=rules.get("updated_by", ""), key="rules_updated_by")
+        change_note = st.text_input("本次修改说明（必填）", key="rules_change_note")
+        if st.button("保存统计规则", type="primary", key="save_report_rules"):
+            updated = deepcopy(rules)
+            updated.setdefault("fields", {})
+            for group, frame in field_frames.items():
+                updated["fields"][group] = {
+                    str(row["系统标准字段"]).strip(): str(row["上传文件字段"]).strip()
+                    for row in frame.to_dict("records")
+                    if str(row.get("系统标准字段", "")).strip()
+                    and str(row.get("上传文件字段", "")).strip()
+                }
+            updated["new_user"] = {"field": new_user_field.strip(), "value": new_user_value}
+            updated["subscription"] = {"source_values": csv_values(subscription_values)}
+            updated["channels"] = {
+                "cooperation_priority": [
+                    {"prefix": kol_prefix.strip(), "channel": "KOL"},
+                    {"prefix": affiliate_prefix.strip(), "channel": "Affiliate"},
+                ],
+                "blank_cooperation_sources": {
+                    **{channel: csv_values(value) for channel, value in source_inputs.items()},
+                    "Auto_Renewal": csv_values(subscription_values),
+                    "Blank": [""],
+                },
+                "default_channel": default_channel,
+            }
+            updated["sem_cost"] = {"google_exclude_contains": csv_values(google_excludes)}
+            updated["regions"] = {
+                "english": csv_values(english_regions),
+                "traditional": csv_values(traditional_regions),
+                "north_america": csv_values(north_america_regions),
+            }
+            errors = validate_rules(updated)
+            if not change_note.strip():
+                errors.append("请填写本次修改说明")
+            if errors:
+                for error in errors:
+                    st.error(error)
+            else:
+                try:
+                    save_rules(updated, st.secrets, editor_name, change_note)
+                    st.success("统计规则已保存。后续生成报告将使用新规则。")
+                except Exception as exc:
+                    st.error(str(exc))
+
+    with st.expander("当前统计口径说明（团队必读）", expanded=False):
+        metric_doc = Path(__file__).resolve().parent / "config" / "统计口径说明.md"
+        if metric_doc.exists():
+            st.markdown(metric_doc.read_text(encoding="utf-8"))
+        else:
+            st.warning("未找到统计口径说明文件。")
+
 with side_col:
     st.markdown('<div class="panel"><div class="panel-title">报告信息<span>自动保存</span></div>', unsafe_allow_html=True)
     start = st.date_input("开始日期", default_start, key="report_start")
@@ -209,7 +339,12 @@ if generate_clicked:
                 orders = read_uploads(order_files); st.write(f"订单数据：{len(orders):,} 行")
                 google = read_uploads(google_files); st.write(f"Google消耗：{len(google):,} 行")
                 bing = read_uploads(bing_files); st.write(f"Bing消耗：{len(bing):,} 行")
-                reports, warnings = generate_v3_reports(reg, orders, google, bing, None, start, end, input_values)
+                # 直接把当前目标配置交给生成引擎。这样刚在网站保存的目标无需等待
+                # Streamlit 重新部署，也会立即写入本次生成的 Excel。
+                reports, warnings = generate_v3_reports(
+                    reg, orders, google, bing, None, start, end, input_values,
+                    targets=load_targets(), rules=load_rules(),
+                )
                 st.session_state["reports"] = reports; st.session_state["warnings"] = warnings
                 status.update(label="三份周报已生成", state="complete", expanded=False)
     except Exception as exc:

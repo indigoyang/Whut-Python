@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent
 WEEKLY = ROOT / "vendor"
 REGION_TEMPLATE = ROOT / "assets" / "周报SEM分地区-新.xlsx"
 MONTHLY_TARGETS_FILE = ROOT / "config" / "monthly_targets.json"
+REPORT_RULES_FILE = ROOT / "config" / "report_rules.json"
 
 ENGLISH = {
     "美国", "英国", "澳大利亚", "加拿大", "印度", "其他", "越南", "沙特", "沙特阿拉伯",
@@ -30,6 +31,65 @@ CORE_REGIONS = {
     "印度": {"印度"}, "美国": {"美国"}, "港澳台": TRADITIONAL,
     "印度尼西亚": {"印度尼西亚"}, "马来西亚": {"马来西亚"},
 }
+ACTIVE_RULES = {}
+
+
+def _configure_rules(rules=None):
+    """载入本次生成使用的规则，并刷新依赖地区集合。"""
+    global ACTIVE_RULES, ENGLISH, TRADITIONAL, CORE_REGIONS
+    if rules is None and REPORT_RULES_FILE.exists():
+        with REPORT_RULES_FILE.open("r", encoding="utf-8") as f:
+            rules = json.load(f)
+    ACTIVE_RULES = rules or {}
+    region_rules = ACTIVE_RULES.get("regions", {})
+    if region_rules.get("english"):
+        ENGLISH = set(region_rules["english"])
+    if region_rules.get("traditional"):
+        TRADITIONAL = set(region_rules["traditional"])
+    north_america = set(region_rules.get("north_america", ["美国", "加拿大"]))
+    CORE_REGIONS = {
+        "印度": {"印度"}, "美国": {"美国"}, "港澳台": TRADITIONAL,
+        "印度尼西亚": {"印度尼西亚"}, "马来西亚": {"马来西亚"},
+    }
+    return north_america
+
+
+def _apply_field_mappings(reg, orders, google, bing):
+    frames = {"registration": reg.copy(), "orders": orders.copy(), "google": google.copy(), "bing": bing.copy()}
+    mappings = ACTIVE_RULES.get("fields", {})
+    warnings = []
+    for group, frame in frames.items():
+        rename = {}
+        for canonical, source in mappings.get(group, {}).items():
+            source = str(source).strip()
+            if canonical not in frame.columns and source in frame.columns:
+                rename[source] = canonical
+                if source != canonical:
+                    warnings.append(f"{group}字段“{source}”已按规则识别为“{canonical}”。")
+        frames[group] = frame.rename(columns=rename)
+    return frames["registration"], frames["orders"], frames["google"], frames["bing"], warnings
+
+
+def _new_user_mask(frame):
+    config = ACTIVE_RULES.get("new_user", {})
+    field = config.get("field", "注册转化周期")
+    if field not in frame.columns:
+        # 如果填写的是上传文件原字段名，反查映射后的标准字段。
+        for canonical, source in ACTIVE_RULES.get("fields", {}).get("orders", {}).items():
+            if source == field and canonical in frame.columns:
+                field = canonical
+                break
+    if field not in frame.columns:
+        raise ValueError(f"新用户判断字段不存在：{field}")
+    value = config.get("value", 0)
+    if isinstance(value, (int, float)):
+        return pd.to_numeric(frame[field], errors="coerce").eq(float(value))
+    return frame[field].fillna("").astype(str).str.strip().eq(str(value).strip())
+
+
+def _source_values(channel):
+    values = ACTIVE_RULES.get("channels", {}).get("blank_cooperation_sources", {}).get(channel, [])
+    return [str(value).strip().upper() for value in values]
 
 
 def _load(name: str, filename: str):
@@ -79,23 +139,47 @@ def _prepare(reg, orders, google, bing):
 def _attrib(orders):
     coop = orders["合作渠道"].fillna("").astype(str).str.strip().str.upper()
     source = orders["末次来源类型"].fillna("").astype(str).str.strip().str.upper()
-    out = pd.Series("SEO", index=orders.index, dtype="object")
-    out[coop.str.startswith("KOL")] = "KOL"
-    out[coop.str.startswith("AFFILIATE")] = "Affiliate"
+    default_channel = ACTIVE_RULES.get("channels", {}).get("default_channel", "SEO")
+    out = pd.Series(default_channel, index=orders.index, dtype="object")
+    priorities = ACTIVE_RULES.get("channels", {}).get("cooperation_priority", [
+        {"prefix": "KOL", "channel": "KOL"},
+        {"prefix": "AFFILIATE", "channel": "Affiliate"},
+    ])
+    for item in priorities:
+        prefix = str(item.get("prefix", "")).strip().upper()
+        if prefix:
+            out[coop.str.startswith(prefix)] = item.get("channel", default_channel)
     blank = coop.eq("")
-    out[blank & source.eq("SEM")] = "SEM"
-    out[blank & source.isin(["KOL", "DIRECT", "SOCIAL_ORGANIC"])] = "KOL"
-    out[blank & source.eq("AUTO_RENEWAL")] = "Auto_Renewal"
-    out[blank & source.str.startswith("AFFILIATE")] = "Affiliate"
-    out[blank & source.eq("UNASSIGNED")] = "Unassigned"
-    out[blank & source.eq("")] = "Blank"
+    channel_rules = ACTIVE_RULES.get("channels", {}).get("blank_cooperation_sources", {
+        "SEM": ["SEM"], "KOL": ["KOL", "DIRECT", "SOCIAL_ORGANIC"],
+        "Affiliate": ["AFFILIATE"], "Auto_Renewal": ["AUTO_RENEWAL"],
+        "Unassigned": ["UNASSIGNED"], "Blank": [""],
+    })
+    channel_rules = dict(channel_rules)
+    subscription_values = ACTIVE_RULES.get("subscription", {}).get("source_values")
+    if subscription_values is not None:
+        channel_rules["Auto_Renewal"] = subscription_values
+    for channel, values in channel_rules.items():
+        normalized = [str(value).strip().upper() for value in values]
+        if channel == "Affiliate":
+            matched = pd.Series(False, index=orders.index)
+            for value in normalized:
+                matched |= source.str.startswith(value)
+        else:
+            matched = source.isin(normalized)
+        out[blank & matched] = channel
     return out
 
 
 def _google_period(google, start, end):
     g = google[_between(google["天"], start, end)].copy()
     campaign = g["广告系列"].fillna("").astype(str)
-    return g[~campaign.str.contains("KOL|generic", case=False, regex=True)]
+    excluded = ACTIVE_RULES.get("sem_cost", {}).get("google_exclude_contains", ["KOL", "generic"])
+    mask = pd.Series(False, index=g.index)
+    for keyword in excluded:
+        if str(keyword).strip():
+            mask |= campaign.str.contains(str(keyword).strip(), case=False, regex=False)
+    return g[~mask]
 
 
 def _bing_period(bing, start, end):
@@ -124,7 +208,8 @@ def _mobile_cost(mobile, start, end):
 
 def _sem_orders(orders, start, end, date_field="订单生成时间"):
     mask = _between(orders[date_field], start, end) & orders["__web"]
-    return orders[mask & blank_mask(orders["合作渠道"]) & orders["末次来源类型"].fillna("").astype(str).str.strip().str.upper().eq("SEM")].copy()
+    sem_sources = _source_values("SEM") or ["SEM"]
+    return orders[mask & blank_mask(orders["合作渠道"]) & orders["末次来源类型"].fillna("").astype(str).str.strip().str.upper().isin(sem_sources)].copy()
 
 
 def _sem_period(orders, google, bing, mobile, start, end):
@@ -132,7 +217,7 @@ def _sem_period(orders, google, bing, mobile, start, end):
     g, b, gc, bc = _costs(google, bing, start, end)
     mobile_cost = _mobile_cost(mobile, start, end)
     source = o["末次来源"].fillna("").astype(str).str.strip().str.upper()
-    new = o[o["注册转化周期"].eq(0)]
+    new = o[_new_user_mask(o)]
     new_source = new["末次来源"].fillna("").astype(str).str.strip().str.upper()
     d7 = _sem_orders(orders, start, end, "用户注册时间")
     d7 = d7[d7["注册转化周期"].between(0, 7)]
@@ -183,7 +268,7 @@ def _all_metrics(reg, orders, google, bing, dates, inputs):
         r = reg[_between(reg["注册时间"], start, end) & reg["__web"]]
         o = orders[_between(orders["订单生成时间"], start, end) & orders["__web"]]
         registered_o = orders[_between(orders["用户注册时间"], start, end) & orders["__web"]]
-        new = o[o["注册转化周期"].eq(0)]
+        new = o[_new_user_mask(o)]
         new_non_sub = new[new["收入归因"].ne("Auto_Renewal")]
         non_sub = o[o["收入归因"].ne("Auto_Renewal")]
         sub = o[o["收入归因"].eq("Auto_Renewal")]
@@ -201,7 +286,7 @@ def _all_metrics(reg, orders, google, bing, dates, inputs):
         m[f"总营收_{label}"] = float(new_non_sub["订单金额"].sum())
         m[f"除订阅总营收_{label}"] = float(non_sub["订单金额"].sum())
         m[f"含订阅总营收_{label}"] = float(o["订单金额"].sum())
-        d0 = registered_o[registered_o["注册转化周期"].eq(0)]
+        d0 = registered_o[_new_user_mask(registered_o)]
         d7 = registered_o[registered_o["注册转化周期"].between(0, 7)]
         m[f"D0营收_{label}"] = float(d0["订单金额"].sum())
         m[f"D7_SEM营收_{label}"] = float(d7.loc[d7["收入归因"].eq("SEM"), "订单金额"].sum())
@@ -209,7 +294,8 @@ def _all_metrics(reg, orders, google, bing, dates, inputs):
             m[f"{channel}营收_{label}"] = float(new.loc[new["收入归因"].eq(channel), "订单金额"].sum())
             m[f"新老除订阅_{channel}营收_{label}"] = float(non_sub.loc[non_sub["收入归因"].eq(channel), "订单金额"].sum())
         m[f"归因总营收_{label}"] = float(new["订单金额"].sum())
-        for name, countries in [("英语", ENGLISH), ("繁中", TRADITIONAL), ("北美", {"美国", "加拿大"}), ("印度", {"印度"})]:
+        north_america = set(ACTIVE_RULES.get("regions", {}).get("north_america", ["美国", "加拿大"]))
+        for name, countries in [("英语", ENGLISH), ("繁中", TRADITIONAL), ("北美", north_america), ("印度", {"印度"})]:
             m[f"地区营收_{name}_{label}"] = float(new_non_sub.loc[new_non_sub["国家"].isin(countries), "订单金额"].sum())
             m[f"新老除订阅地区_{name}_{label}"] = float(non_sub.loc[non_sub["国家"].isin(countries), "订单金额"].sum())
             m[f"订阅地区_{name}_{label}"] = float(sub.loc[sub["国家"].isin(countries), "订单金额"].sum())
@@ -236,13 +322,14 @@ def _region_metrics(reg, orders, google, bing, start, end, region):
     r = reg[_between(reg["注册时间"], start, end) & reg["__web"] & reg["地区"].isin(countries)]
     r = r[r["渠道类型"].fillna("").astype(str).str.upper().eq("SEM") & ~r["广告来源"].fillna("").astype(str).str.contains("FB", case=False)]
     o = _sem_orders(orders, start, end); o = o[o["地区"].isin(countries)]
-    new = o[o["注册转化周期"].eq(0)]
+    new = o[_new_user_mask(o)]
     g, b, _, _ = _costs(google, bing, start, end)
     google_names = {"港澳台": {"香港","台湾","澳门"}}.get(region, countries)
     bing_names = {"美国":{"United States"},"印度":{"India"},"港澳台":{"Taiwan","Hong Kong SAR","Macao SAR"},"印度尼西亚":{"Indonesia"},"马来西亚":{"Malaysia"}}[region]
     cost = float(g.loc[g["地理位置"].isin(google_names), "费用"].sum()) + float(b.loc[b["ad_campaign"].fillna("").astype(str).ne("Search total") & b["region"].isin(bing_names), "cost"].sum())
     reg_count, paid, revenue, new_paid, new_rev = len(r), len(o), float(o["订单金额"].sum()), len(new), float(new["订单金额"].sum())
-    all_new = orders[_between(orders["订单生成时间"], start, end) & orders["__web"] & orders["地区"].isin(countries) & orders["注册转化周期"].eq(0)]
+    base_all_new = orders[_between(orders["订单生成时间"], start, end) & orders["__web"] & orders["地区"].isin(countries)]
+    all_new = base_all_new[_new_user_mask(base_all_new)]
     return {"新增注册":reg_count,"注册单价":safe_div(cost,reg_count),"客单价":safe_div(revenue,paid),"新老用户注册付费率":safe_div(paid,reg_count),"新用户注册付费率":safe_div(new_paid,reg_count),"新老用户付费量":paid,"新老用户营收":revenue,"新用户订单量":new_paid,"新用户营收":new_rev,"消耗":cost,"新老用户ROI（除订阅）":safe_div(revenue,cost),"SEM新用户ROI":safe_div(new_rev,cost),"全渠道新用户ROI":safe_div(float(all_new["订单金额"].sum()),cost)}
 
 
@@ -250,7 +337,7 @@ def _country_metrics(reg, orders, google, bing, start, end, country):
     r = reg[_between(reg["注册时间"], start, end) & reg["__web"] & reg["地区"].eq(country)]
     r = r[r["渠道类型"].fillna("").astype(str).str.upper().eq("SEM") & ~r["广告来源"].fillna("").astype(str).str.contains("FB", case=False)]
     o = _sem_orders(orders, start, end); o = o[o["地区"].eq(country)]
-    new = o[o["注册转化周期"].eq(0)]
+    new = o[_new_user_mask(o)]
     g, b, _, _ = _costs(google, bing, start, end)
     google_names, bing_names = REGION_MOD.OTHER_COUNTRY_AD_MAP.get(country, ([country], [country]))
     b_detail = b[b["ad_campaign"].fillna("").astype(str).ne("Search total")]
@@ -298,8 +385,11 @@ def _simplify_region_main_sheet(ws):
     return ws
 
 
-def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs):
+def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs, targets=None, rules=None):
+    _configure_rules(rules)
+    reg, orders, google, bing, mapping_warnings = _apply_field_mappings(reg, orders, google, bing)
     reg, orders, google, bing, warnings = _prepare(reg, orders, google, bing)
+    warnings = mapping_warnings + warnings
     dates = _dates(start, end)
     month_key = end.strftime("%Y-%m")
     monthly_all = dict(ALL_MOD.MONTHLY_TARGETS.get(month_key, {}))
@@ -309,6 +399,11 @@ def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs):
             configured_targets = json.load(f).get(month_key, {})
         monthly_all.update(configured_targets.get("all_channel", {}))
         monthly_sem.update(configured_targets.get("sem", {}))
+    # 网站保存后的目标配置优先级最高，保证保存后立即生成即可生效。
+    if targets:
+        current_targets = targets.get(month_key, {})
+        monthly_all.update(current_targets.get("all_channel", {}))
+        monthly_sem.update(current_targets.get("sem", {}))
 
     all_metrics = _all_metrics(reg, orders, google, bing, dates, inputs)
     all_wb = ALL_MOD.create_report(
@@ -323,7 +418,10 @@ def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs):
     period_map = {"本周":(dates["this_week_start"],dates["this_week_end"]),"上周":(dates["last_week_start"],dates["last_week_end"]),"MTD":(dates["month_start"],dates["month_end"])}
     sem_data = {k:_sem_period(orders,google,bing,mobile,*v) for k,v in period_map.items()}
     sem_wb = SEM_MOD.create_report(dates, sem_data["本周"], sem_data["上周"], sem_data["MTD"], monthly_sem)
-    _remove_metric_rows(sem_wb["SEM周报"], {"PC端", "H5端"})
+    _remove_metric_rows(
+        sem_wb["SEM周报"],
+        {"PC端", "H5端", "SEM—新用户ROI（D7）"},
+    )
 
     if not REGION_TEMPLATE.exists():
         raise FileNotFoundError(f"找不到分地区模板：{REGION_TEMPLATE}")
@@ -338,10 +436,10 @@ def generate_v3_reports(reg, orders, google, bing, mobile, start, end, inputs):
         co = orders[_between(orders["支付时间"] if "支付时间" in orders else orders["订单生成时间"], date(2026,1,1), end) & orders["__web"] & orders["地区"].isin(countries)]
         sem_co = co[blank_mask(co["合作渠道"]) & co["渠道类型"].fillna("").astype(str).str.upper().eq("SEM")]
         non_sub = sem_co[~sem_co["支付位置"].fillna("").astype(str).str.contains("订阅")]
-        registered_paid = sem_co[sem_co["注册转化周期"].eq(0)]
+        registered_paid = sem_co[_new_user_mask(sem_co)]
         cumulative[region] = {"reg":len(sem_cr),"paid":len(non_sub),"rate":safe_div(len(non_sub),len(sem_cr)),"registered_user_paid":len(registered_paid),"registered_user_rate":safe_div(len(registered_paid),len(sem_cr))}
         if region in {"印度","美国","港澳台"}:
-            all_new = co[co["注册转化周期"].eq(0)]
+            all_new = co[_new_user_mask(co)]
             cumulative[region].update({"all_channel_reg":len(cr),"all_channel_new_user_orders":len(all_new),"all_channel_new_user_rate":safe_div(len(all_new),len(cr))})
     region_wb = REGION_MOD.fill_report(region_wb, dates, region_sets["本周"], region_sets["上周"], region_sets["MTD"], cumulative)
     _simplify_region_main_sheet(region_wb.active)

@@ -46,10 +46,13 @@ def github_settings(secrets) -> dict:
     return {
         "token": github.get("token", ""),
         "owner": github.get("owner", "indigoyang"),
-        "repo": github.get("repo", "Whut-Python"),
+        "repo": github.get("repo", "weekly-report"),
         "branch": github.get("branch", "main"),
         "path": github.get(
             "target_path", "weekly_report_workbench/config/monthly_targets.json"
+        ),
+        "rule_path": github.get(
+            "rule_path", "weekly_report_workbench/config/report_rules.json"
         ),
     }
 
