@@ -149,30 +149,61 @@ with main_col:
         target_tab_all, target_tab_sem = st.tabs(["全渠道目标", "SEM目标"])
 
         def target_editor(tab, rows_config, values, key):
-            rows = pd.DataFrame(
-                [
-                    {"_目标键": metric_key or "", "指标": label,
-                     "目标": values.get(metric_key) if metric_key else None}
-                    for metric_key, label in rows_config
-                ]
-            )
             with tab:
                 st.caption(
-                    f"共 {len(rows_config)} 行；灰色分区标题只用于对应Excel结构，不保存目标。"
+                    f"共 {sum(metric_key is not None for metric_key, _ in rows_config)} 个可填写目标；"
+                    "蓝灰色分区行只用于区分模块，不需要填写，也不会保存目标。"
                 )
-                return st.data_editor(
-                    rows,
-                    column_config={
-                        "_目标键": None,
-                        "指标": st.column_config.TextColumn("指标", disabled=True),
-                        "目标": st.column_config.NumberColumn("目标", min_value=0.0, format="%.2f"),
-                    },
-                    disabled=["指标"],
-                    hide_index=True,
-                    use_container_width=True,
-                    height=420,
-                    key=key,
-                )
+                edited_frames = []
+                current_rows = []
+                section_no = 0
+
+                def render_metrics(metric_rows, editor_key):
+                    if not metric_rows:
+                        return
+                    frame = pd.DataFrame([
+                        {
+                            "_目标键": metric_key,
+                            "指标": label,
+                            "目标": values.get(metric_key),
+                        }
+                        for metric_key, label in metric_rows
+                    ])
+                    edited_frames.append(st.data_editor(
+                        frame,
+                        column_config={
+                            "_目标键": None,
+                            "指标": st.column_config.TextColumn("指标", disabled=True),
+                            "目标": st.column_config.NumberColumn(
+                                "目标", min_value=0.0, format="%.2f"
+                            ),
+                        },
+                        disabled=["指标"],
+                        hide_index=True,
+                        use_container_width=True,
+                        height=min(360, 38 + 36 * len(metric_rows)),
+                        key=editor_key,
+                    ))
+
+                for metric_key, label in rows_config:
+                    if metric_key is None:
+                        render_metrics(current_rows, f"{key}_section_{section_no}")
+                        current_rows = []
+                        section_no += 1
+                        st.markdown(
+                            "<div style='margin:12px 0 6px;padding:10px 14px;"
+                            "background:#d8e8f5;border-left:5px solid #4b78c2;"
+                            "font-weight:700;color:#244f75;'>"
+                            f"{label}</div>",
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        current_rows.append((metric_key, label))
+                render_metrics(current_rows, f"{key}_section_{section_no}")
+
+                if not edited_frames:
+                    return pd.DataFrame(columns=["_目标键", "指标", "目标"])
+                return pd.concat(edited_frames, ignore_index=True)
 
         edited_all = target_editor(
             target_tab_all, ALL_CHANNEL_TARGET_ROWS,

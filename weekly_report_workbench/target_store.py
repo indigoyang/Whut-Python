@@ -56,6 +56,7 @@ SEM_TARGET_METRICS = [
 # 目标维护页严格按照最终Excel的显示顺序排列。
 # 元组格式：(保存键, 页面显示名称)；保存键为None的是分区标题，不保存目标。
 ALL_CHANNEL_TARGET_ROWS = [
+    (None, "核心ROI（末次归因）"),
     ("WEB—新用户ROI", "WEB—新用户ROI"),
     ("WEB—新老综合ROI（除订阅）", "WEB—新老综合ROI（除订阅）"),
     ("WEB—新老综合ROI（含订阅）", "WEB—新老综合ROI（含订阅）"),
